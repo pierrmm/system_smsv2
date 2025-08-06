@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AdminUser {
+  id         String   @id @default(cuid())
+  email      String   @unique
+  password   String
+  name       String
+  role       String   @default("admin")
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  letters Letter[]
+
+  @@map("admin_users")
+}
+
+model Letter {
+  id              String    @id @default(cuid())
+  letter_number   String    @unique
+  title           String
+  subject         String
+  content         String?
+  type            String
+  sender          String
+  recipient       String
+  date_received   DateTime?
+  date_sent       DateTime?
+  status          String    @default("pending")
+  file_path       String?
+  category_id     String?
+  created_by      String
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  creator  AdminUser        @relation(fields: [created_by], references: [id])
+  category LetterCategory?  @relation(fields: [category_id], references: [id])
+
+  @@map("letters")
+}
+
+model LetterCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  color       String?  @default("#6B7280")
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  letters Letter[]
+
+  @@map("letter_categories")
+}
