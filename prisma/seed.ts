@@ -10,7 +10,7 @@ async function main() {
   const hashedPassword = await bcrypt.hash('admin123', 10)
 
   // Create admin user
-  const admin = await prisma.adminUser.upsert({
+  const adminUser = await prisma.adminUser.upsert({
     where: { email: 'admin@sekolah.com' },
     update: {},
     create: {
@@ -22,7 +22,7 @@ async function main() {
     },
   })
 
-  console.log('👤 Admin user created:', admin.email)
+  console.log('👤 Admin user created:', adminUser.email)
 
   // Create sample categories
   const categories = [
@@ -69,7 +69,7 @@ async function main() {
       sender: 'Dinas Pendidikan',
       recipient: 'Kepala Sekolah',
       status: 'new',
-      created_by: admin.id,
+      created_by: adminUser.id,
     },
     {
       letter_number: 'SMS/002/2024',
@@ -80,7 +80,7 @@ async function main() {
       sender: 'Kepala Sekolah',
       recipient: 'Seluruh Warga Sekolah',
       status: 'sent',
-      created_by: admin.id,
+      created_by: adminUser.id,
     }
   ]
 
@@ -91,7 +91,38 @@ async function main() {
   }
 
   console.log('📄 Sample letters created')
-  console.log('✅ Seed completed!')
+
+  // Create sample permission letters
+  const samplePermissionLetter = await prisma.permissionLetter.create({
+    data: {
+      letter_number: '001/IZIN/01/2025',
+      date: new Date('2025-01-15'),
+      time_start: '08:00',
+      time_end: '16:00',
+      location: 'Aula Sekolah',
+      activity: 'Kegiatan Pramuka',
+      letter_type: 'izin_kegiatan',
+      reason: 'Mengikuti kegiatan pramuka tingkat kabupaten',
+      status: 'approved',
+      createdById: adminUser.id,
+      participants: {
+        create: [
+          {
+            name: 'Ahmad Rizki',
+            class: 'XII IPA 1'
+          },
+          {
+            name: 'Siti Nurhaliza',
+            class: 'XII IPA 2'
+          }
+        ]
+      }
+    }
+  })
+
+  console.log('📄 Sample permission letter created:', samplePermissionLetter.letter_number)
+
+  console.log('✅ Seed completed successfully!')
 }
 
 main()

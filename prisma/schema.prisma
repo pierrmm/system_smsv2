@@ -12,49 +12,87 @@ model AdminUser {
   email      String   @unique
   password   String
   name       String
-  role       String   @default("admin")
+  role       String   @default("user") // admin, user
   is_active  Boolean  @default(true)
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  letters Letter[]
+  // Relations
+  created_letters Letter[] @relation("CreatedBy")
+  approved_letters Letter[] @relation("ApprovedBy")
 
   @@map("admin_users")
 }
 
 model Letter {
-  id              String    @id @default(cuid())
-  letter_number   String    @unique
-  title           String
+  id              String        @id @default(cuid())
+  letter_number   String?       @unique
   subject         String
-  content         String?
-  type            String
-  sender          String
-  recipient       String
+  content         String
+  type            LetterType    // INCOMING, OUTGOING
+  status          LetterStatus  @default(DRAFT) // DRAFT, PENDING, APPROVED, REJECTED, ARCHIVED
+  sender          String?
+  recipient       String?
   date_received   DateTime?
   date_sent       DateTime?
-  status          String    @default("pending")
-  file_path       String?
-  category_id     String?
+  attachment_url  String?
+  notes           String?
+  
+  // Relations
   created_by      String
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @updatedAt
-
-  creator  AdminUser        @relation(fields: [created_by], references: [id])
-  category LetterCategory?  @relation(fields: [category_id], references: [id])
+  creator         AdminUser     @relation("CreatedBy", fields: [created_by], references: [id])
+  approved_by     String?
+  approver        AdminUser?    @relation("ApprovedBy", fields: [approved_by], references: [id])
+  
+  created_at      DateTime      @default(now())
+  updated_at      DateTime      @updatedAt
 
   @@map("letters")
 }
 
-model LetterCategory {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-  color       String?  @default("#6B7280")
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
+enum LetterType {
+  INCOMING
+  OUTGOING
+}
 
-  letters Letter[]
+enum LetterStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
 
-  @@map("letter_categories")
+model PermissionLetter {
+  id            String   @id @default(cuid())
+  letter_number String   @unique
+  date          DateTime
+  time_start    String
+  time_end      String
+  location      String
+  activity      String
+  letter_type   String   // dispensasi, keterangan, surat_tugas, lomba
+  reason        String?
+  status        String   @default("pending") // pending, approved, rejected
+  created_by    String
+  approved_by   String?
+  approved_at   DateTime?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  participants PermissionParticipant[]
+
+  @@map("permission_letters")
+}
+
+model PermissionParticipant {
+  id                   String           @id @default(cuid())
+  permission_letter_id String
+  name                 String
+  class                String
+  created_at           DateTime         @default(now())
+
+  permission_letter PermissionLetter @relation(fields: [permission_letter_id], references: [id], onDelete: Cascade)
+
+  @@map("permission_participants")
 }

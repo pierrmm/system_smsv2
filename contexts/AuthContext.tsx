@@ -15,6 +15,7 @@ interface AuthContextType {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error?: { message: string; type: string } }>;
   signOut: () => Promise<void>;
+  isAdmin: () => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -31,6 +32,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+
+  // Check if user is admin
+  const isAdmin = () => {
+    return user?.role === 'admin';
+  };
 
   useEffect(() => {
     // Check if user is logged in from localStorage
@@ -119,7 +125,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     loading,
     signIn,
-    signOut
+    signOut,
+    isAdmin
   };
 
   console.log('AuthContext current state:', { user, loading });
