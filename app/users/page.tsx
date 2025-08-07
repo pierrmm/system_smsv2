@@ -60,11 +60,13 @@ export default function UsersPage() {
     role: 'user',
     is_active: true
   });
+  const [accessDenied, setAccessDenied] = useState(false);
 
-  // Redirect if not admin
+  // Update useEffect untuk redirect
   useEffect(() => {
     if (!isAdmin()) {
-      router.push('/dashboard');
+      setAccessDenied(true);
+      setLoading(false);
       return;
     }
   }, [isAdmin, router]);
@@ -187,8 +189,28 @@ export default function UsersPage() {
     }
   };
 
-  if (!isAdmin()) {
-    return null;
+  if (accessDenied) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="mb-4">
+            <IconUsers className="h-16 w-16 text-red-500 mx-auto" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+            Akses Ditolak
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            Hanya administrator yang dapat mengakses halaman manajemen pengguna.
+          </p>
+          <Button
+            color="primary"
+            onPress={() => router.push('/dashboard')}
+          >
+            Kembali ke Dashboard
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   if (loading) {

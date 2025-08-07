@@ -30,7 +30,7 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isAdmin } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -43,23 +43,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   const links = [
     {
       label: "Dashboard",
-      href: "/dashboard",
+      href: "/",
       icon: (
         <IconDashboard className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />
-      ),
-    },
-    {
-      label: "Surat Masuk",
-      href: "/letters/incoming",
-      icon: (
-        <IconMail className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />
-      ),
-    },
-    {
-      label: "Surat Keluar",
-      href: "/letters/outgoing",
-      icon: (
-        <IconSend className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />
       ),
     },
     {
@@ -69,27 +55,14 @@ export function AppLayout({ children }: AppLayoutProps) {
         <IconFileText className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />
       ),
     },
-    {
-      label: "Arsip Surat",
-      href: "/letters/archive",
-      icon: (
-        <IconArchive className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />
-      ),
-    },
-    {
+    // Only show Users menu for admin
+    ...(isAdmin() ? [{
       label: "Pengguna",
       href: "/users",
       icon: (
         <IconUsers className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />
       ),
-    },
-    {
-      label: "Pengaturan",
-      href: "/settings",
-      icon: (
-        <IconSettings className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />
-      ),
-    },
+    }] : []),
   ];
 
   return (
@@ -147,7 +120,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 export const Logo = () => {
   return (
     <Link
-      href="/dashboard"
+      href="/"
       className="font-normal flex space-x-2 items-center text-sm text-black py-1 relative z-20"
     >
       <div className="h-5 w-6 bg-black dark:bg-white rounded-br-lg rounded-tr-sm rounded-tl-lg rounded-bl-sm flex-shrink-0" />
@@ -165,7 +138,7 @@ export const Logo = () => {
 export const LogoIcon = () => {
   return (
     <Link
-      href="/dashboard"
+      href="/"
       className="font-normal flex space-x-2 items-center text-sm text-black py-1 relative z-20"
     >
       <div className="h-5 w-6 bg-black dark:bg-white rounded-br-lg rounded-tr-sm rounded-tl-lg rounded-bl-sm flex-shrink-0" />

@@ -17,50 +17,37 @@ model AdminUser {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  // Relations
-  created_letters Letter[] @relation("CreatedBy")
-  approved_letters Letter[] @relation("ApprovedBy")
+  // Relations for Permission Letters
+  created_permission_letters PermissionLetter[] @relation("PermissionCreatedBy")
+  approved_permission_letters PermissionLetter[] @relation("PermissionApprovedBy")
+
+  // Relations for regular Letters (if you have them)
+  created_letters Letter[] @relation("LetterCreatedBy")
+  approved_letters Letter[] @relation("LetterApprovedBy")
 
   @@map("admin_users")
 }
 
 model Letter {
-  id              String        @id @default(cuid())
-  letter_number   String?       @unique
-  subject         String
-  content         String
-  type            LetterType    // INCOMING, OUTGOING
-  status          LetterStatus  @default(DRAFT) // DRAFT, PENDING, APPROVED, REJECTED, ARCHIVED
-  sender          String?
-  recipient       String?
-  date_received   DateTime?
-  date_sent       DateTime?
-  attachment_url  String?
-  notes           String?
-  
+  id            String   @id @default(cuid())
+  letter_number String   @unique
+  title         String
+  subject       String
+  content       String
+  type          String   // 'incoming' | 'outgoing'
+  sender        String
+  recipient     String
+  status        String
+  created_by    String
+  approved_by   String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
   // Relations
-  created_by      String
-  creator         AdminUser     @relation("CreatedBy", fields: [created_by], references: [id])
-  approved_by     String?
-  approver        AdminUser?    @relation("ApprovedBy", fields: [approved_by], references: [id])
-  
-  created_at      DateTime      @default(now())
-  updated_at      DateTime      @updatedAt
+  creator   AdminUser  @relation("LetterCreatedBy", fields: [created_by], references: [id])
+  approver  AdminUser? @relation("LetterApprovedBy", fields: [approved_by], references: [id])
 
   @@map("letters")
-}
-
-enum LetterType {
-  INCOMING
-  OUTGOING
-}
-
-enum LetterStatus {
-  DRAFT
-  PENDING
-  APPROVED
-  REJECTED
-  ARCHIVED
 }
 
 model PermissionLetter {
@@ -80,6 +67,9 @@ model PermissionLetter {
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 
+  // Relations
+  creator      AdminUser @relation("PermissionCreatedBy", fields: [created_by], references: [id])
+  approver     AdminUser? @relation("PermissionApprovedBy", fields: [approved_by], references: [id])
   participants PermissionParticipant[]
 
   @@map("permission_letters")

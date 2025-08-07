@@ -4,56 +4,58 @@ import { prisma } from '@/lib/prisma';
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
     const search = searchParams.get('search') || '';
+    const type = searchParams.get('type') || '';
     const status = searchParams.get('status') || '';
-
-    const skip = (page - 1) * limit;
 
     const where: any = {};
 
     if (search) {
       where.OR = [
+        { letter_number: { contains: search, mode: 'insensitive' } },
         { activity: { contains: search, mode: 'insensitive' } },
         { location: { contains: search, mode: 'insensitive' } },
-        { letter_type: { contains: search, mode: 'insensitive' } }
+        { creator: { name: { contains: search, mode: 'insensitive' } } }
       ];
+    }
+
+    if (type) {
+      where.letter_type = type;
     }
 
     if (status) {
       where.status = status;
     }
 
-    const [letters, total] = await Promise.all([
-      prisma.permissionLetter.findMany({
-        where,
-        include: {
-          participants: true,
+    const letters = await prisma.permissionLetter.findMany({
+      where,
+      include: {
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
         },
-        orderBy: {
-          created_at: 'desc'
-        },
-        skip,
-        take: limit,
-      }),
-      prisma.permissionLetter.count({ where })
-    ]);
-
-    return NextResponse.json({
-      letters,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit)
+        participants: true,
+        approver: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        created_at: 'desc'
       }
     });
 
+    return NextResponse.json({ letters });
   } catch (error) {
-    console.error('Error fetching permission letters:', error);
+    console.error('Error fetching letters:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch permission letters' },
+      { error: 'Failed to fetch letters' },
       { status: 500 }
     );
   }
@@ -74,49 +76,25 @@ export async function POST(request: NextRequest) {
       created_by
     } = body;
 
-    // Validasi data
-    if (!date || !time_start || !time_end || !location || !activity || !letter_type) {
-      return NextResponse.json(
-        { error: 'Semua field wajib harus diisi' },
-        { status: 400 }
-      );
-    }
-
-    if (!participants || participants.length === 0) {
-      return NextResponse.json(
-        { error: 'Minimal harus ada satu peserta' },
-        { status: 400 }
-      );
-    }
-
-    // Generate nomor surat
-    const currentYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth() + 1;
+    // Generate letter number
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
     
-    const lastLetter = await prisma.permissionLetter.findFirst({
+    // Count letters this month to generate sequential number
+    const letterCount = await prisma.permissionLetter.count({
       where: {
         created_at: {
-          gte: new Date(currentYear, currentMonth - 1, 1),
-          lt: new Date(currentYear, currentMonth, 1)
+          gte: new Date(year, today.getMonth(), 1),
+          lt: new Date(year, today.getMonth() + 1, 1)
         }
-      },
-      orderBy: {
-        created_at: 'desc'
       }
     });
 
-    let nextNumber = 1;
-    if (lastLetter && lastLetter.letter_number) {
-      const match = lastLetter.letter_number.match(/(\d+)/);
-      if (match) {
-        nextNumber = parseInt(match[1]) + 1;
-      }
-    }
+    const letterNumber = `${String(letterCount + 1).padStart(3, '0')}/IZIN/${month}/${year}`;
 
-    const letterNumber = `${nextNumber.toString().padStart(3, '0')}/IZIN/${currentMonth.toString().padStart(2, '0')}/${currentYear}`;
-
-    // Simpan surat izin
-    const permissionLetter = await prisma.permissionLetter.create({
+    // Create letter with participants
+    const letter = await prisma.permissionLetter.create({
       data: {
         letter_number: letterNumber,
         date: new Date(date),
@@ -125,9 +103,9 @@ export async function POST(request: NextRequest) {
         location,
         activity,
         letter_type,
-        reason: reason || '',
+        reason,
         status: 'pending',
-        created_by: created_by || 'system', // Gunakan created_by dari request
+        created_by,
         participants: {
           create: participants.map((participant: any) => ({
             name: participant.name,
@@ -136,15 +114,22 @@ export async function POST(request: NextRequest) {
         }
       },
       include: {
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        },
         participants: true
       }
     });
 
-    return NextResponse.json(permissionLetter, { status: 201 });
+    return NextResponse.json({ letter });
   } catch (error) {
-    console.error('Error creating permission letter:', error);
+    console.error('Error creating letter:', error);
     return NextResponse.json(
-      { error: 'Gagal menyimpan surat izin' },
+      { error: 'Failed to create letter' },
       { status: 500 }
     );
   }

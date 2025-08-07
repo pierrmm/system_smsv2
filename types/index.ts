@@ -37,23 +37,46 @@ export interface PermissionLetter {
   time_end: string;
   location: string;
   activity: string;
-  letter_type: 'dispensasi' | 'keterangan' | 'surat_tugas' | 'lomba';
+  letter_type: string;
   reason?: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: string;
+  created_at: string;
+  updated_at: string;
   created_by: string;
   approved_by?: string;
   approved_at?: string;
-  created_at: string;
-  updated_at: string;
-  participants: PermissionParticipant[];
+  creator: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  approver?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  participants: Participant[];
 }
 
-export interface PermissionParticipant {
+export interface Participant {
   id: string;
-  permission_letter_id: string;
   name: string;
   class: string;
-  created_at: string;
+  letter_id: string;
+}
+
+export interface FormData {
+  date: string;
+  time_start: string;
+  time_end: string;
+  location: string;
+  activity: string;
+  letter_type: string;
+  reason: string;
+  participants: Array<{
+    name: string;
+    class: string;
+  }>;
 }
 
 export interface AuthContextType {
@@ -61,4 +84,5 @@ export interface AuthContextType {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error?: { message: string; type: string } }>;
   signOut: () => Promise<void>;
+  isAdmin: () => boolean;
 }

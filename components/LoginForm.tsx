@@ -45,8 +45,8 @@ export function LoginForm() {
       }
     } else {
       console.log('Login successful, redirecting...');
-      // Redirect ke dashboard setelah login berhasil
-      router.push('/dashboard');
+      // Redirect ke halaman utama setelah login berhasil
+      router.push('/');
     }
   };
 
