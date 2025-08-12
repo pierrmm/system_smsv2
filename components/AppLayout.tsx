@@ -1,6 +1,6 @@
 "use client";
 import clsx from "clsx";
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Sidebar, SidebarBody, SidebarLink } from "@/components/ui/sidebar";
 import { 
   IconDashboard, 
@@ -13,7 +13,8 @@ import {
   IconMail,
   IconSend,
   IconArchive,
-  IconUser
+  IconUser,
+  IconArrowUp
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -34,6 +35,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const handleLogout = async () => {
     await signOut();
@@ -64,6 +67,30 @@ export function AppLayout({ children }: AppLayoutProps) {
       ),
     }] : []),
   ];
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    const threshold = 300;
+
+    function getScrollable() {
+      if (el && el.scrollHeight > el.clientHeight + 10) return el;
+      return window;
+    }
+
+    const target: any = getScrollable();
+
+    const handleScroll = () => {
+      const pos =
+        target === window
+          ? window.scrollY || document.documentElement.scrollTop
+          : target.scrollTop;
+      setShowBackToTop(pos > threshold);
+    };
+
+    target.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => target.removeEventListener("scroll", handleScroll);
+  }, []);
 
   return (
     <div
@@ -113,8 +140,27 @@ export function AppLayout({ children }: AppLayoutProps) {
         </SidebarBody>
       </Sidebar>
       <div className="flex flex-1 flex-col">
-        <div className="p-2 md:p-10 rounded-tl-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 flex flex-col gap-2 flex-1 w-full h-full overflow-y-auto">
+        <div
+          ref={scrollRef}
+          className="relative p-2 md:p-10 rounded-tl-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 flex flex-col gap-2 flex-1 w-full h-full overflow-y-auto"
+        >
           {children}
+          {showBackToTop && (
+            <button
+              onClick={() => {
+                const el = scrollRef.current;
+                if (el && el.scrollHeight > el.clientHeight + 10) {
+                  el.scrollTo({ top: 0, behavior: "smooth" });
+                } else {
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }
+              }}
+              aria-label="Kembali ke atas"
+              className="fixed bottom-5 right-4 md:bottom-8 md:right-8 z-40 rounded-full bg-neutral-900 text-white dark:bg-neutral-200 dark:text-neutral-900 p-3 shadow-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-neutral-400 dark:focus:ring-neutral-600"
+            >
+              <IconArrowUp className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -169,58 +169,66 @@ export default function PermissionLetterDetailPage({
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/letters/permissions">
-              <Button
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-3 md:gap-4">
+             <Link href="/letters/permissions">
+               <Button
                 variant="light"
+                size="sm"
+                className="md:size-medium"
                 startContent={<IconArrowLeft className="h-4 w-4" />}
-              >
-                Kembali
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Detail Surat Izin
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-1">
-                {letter.letter_number}
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex gap-2">
-            <Button
+               >
+                 Kembali
+               </Button>
+             </Link>
+             <div>
+               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                 Detail Surat Izin
+               </h1>
+               <p className="text-gray-600 dark:text-gray-400 mt-1">
+                 {letter.letter_number}
+               </p>
+             </div>
+           </div>
+           
+          <div className="flex flex-col sm:flex-row w-full md:w-auto gap-2 sm:items-stretch md:justify-end">
+             <Button
               variant="light"
+              size="sm"
+              className="w-full sm:w-auto md:size-medium"
               startContent={<IconPrinter className="h-4 w-4" />}
-            >
-              Cetak
-            </Button>
-            
-            {user?.role === 'admin' && letter.status === 'pending' && (
-              <>
-                <Button
-                  color="success"
-                  variant="flat"
-                  startContent={<IconCheck className="h-4 w-4" />}
-                  onClick={() => handleApproval('approved')}
-                  isLoading={actionLoading}
-                >
-                  Setujui
-                </Button>
-                <Button
-                  color="danger"
-                  variant="flat"
-                  startContent={<IconX className="h-4 w-4" />}
-                  onClick={() => handleApproval('rejected')}
-                  isLoading={actionLoading}
-                >
-                  Tolak
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
+             >
+               Cetak
+             </Button>
+             
+             {user?.role === 'admin' && letter.status === 'pending' && (
+               <>
+                 <Button
+                   color="success"
+                   variant="flat"
+                   size="sm"
+                   className="w-full sm:w-auto md:size-medium"
+                   startContent={<IconCheck className="h-4 w-4" />}
+                   onClick={() => handleApproval('approved')}
+                   isLoading={actionLoading}
+                 >
+                   Setujui
+                 </Button>
+                 <Button
+                   color="danger"
+                   variant="flat"
+                   size="sm"
+                   className="w-full sm:w-auto md:size-medium"
+                   startContent={<IconX className="h-4 w-4" />}
+                   onClick={() => handleApproval('rejected')}
+                   isLoading={actionLoading}
+                 >
+                   Tolak
+                 </Button>
+               </>
+             )}
+           </div>
+         </div>
 
         {/* Status Card */}
         <Card>
@@ -345,27 +353,25 @@ export default function PermissionLetterDetailPage({
                 </h3>
               </div>
             </CardHeader>
-            <CardBody>
-              <div className="space-y-3">
-                {letter.participants.map((participant, index) => (
-                  <div 
-                    key={participant.id} 
-                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
-                  >
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-white">
-                        {participant.name}
-                      </p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Kelas {participant.class}
-                      </p>
-                    </div>
-                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      #{index + 1}
-                    </span>
+            <CardBody className="space-y-3 max-h-80 overflow-y-auto pr-1">
+              {letter.participants.map((participant, index) => (
+                <div
+                  key={participant.id}
+                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                >
+                  <div>
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {participant.name}
+                    </p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Kelas {participant.class}
+                    </p>
                   </div>
-                ))}
-              </div>
+                  <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    #{index + 1}
+                  </span>
+                </div>
+              ))}
             </CardBody>
           </Card>
         </div>
