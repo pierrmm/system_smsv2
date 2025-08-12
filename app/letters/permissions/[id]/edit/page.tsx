@@ -337,7 +337,7 @@ export default function EditPermissionLetterPage() {
                   
                   <Input
                     label="Kelas"
-                    placeholder="Contoh: XII IPA 1"
+                    placeholder="Contoh: XII RPL 1"
                     value={participant.class}
                     onChange={(e) => handleParticipantChange(index, 'class', e.target.value)}
                     className="flex-1"

@@ -217,7 +217,7 @@ export default function UsersPage() {
           </p>
           <Button
             color="primary"
-            onPress={() => router.push('/dashboard')}
+            onPress={() => router.push('/')}
           >
             Kembali ke Dashboard
           </Button>
