@@ -29,7 +29,8 @@ import {
   IconEdit,
   IconTrash,
   IconSearch,
-  IconEye
+  IconEye,
+  IconAlertTriangle
 } from '@tabler/icons-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -61,6 +62,11 @@ export default function UsersPage() {
     is_active: true
   });
   const [accessDenied, setAccessDenied] = useState(false);
+
+  // State modal delete
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Update useEffect untuk redirect
   useEffect(() => {
@@ -168,24 +174,31 @@ export default function UsersPage() {
     }
   };
 
-  // Handle delete user
-  const handleDelete = async (userId: string) => {
-    if (confirm('Apakah Anda yakin ingin menghapus pengguna ini?')) {
-      try {
-        const response = await fetch(`/api/users/${userId}`, {
-          method: 'DELETE',
-        });
+  // Handle delete user (open modal)
+  const handleAskDelete = (u: User) => {
+    setUserToDelete(u);
+    setDeleteOpen(true);
+  };
 
-        if (response.ok) {
-          await fetchUsers();
-        } else {
-          console.error('Error deleting user');
-          alert('Error deleting user');
-        }
-      } catch (error) {
-        console.error('Error deleting user:', error);
+  const handleConfirmDelete = async () => {
+    if (!userToDelete) return;
+    try {
+      setDeleting(true);
+      const response = await fetch(`/api/users/${userToDelete.id}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        await fetchUsers();
+        setDeleteOpen(false);
+        setUserToDelete(null);
+      } else {
         alert('Error deleting user');
       }
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      alert('Error deleting user');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -380,7 +393,7 @@ export default function UsersPage() {
                         size="sm"
                         variant="light"
                         color="danger"
-                        onPress={() => handleDelete(user.id)}
+                        onPress={() => handleAskDelete(user)}
                       >
                         <IconTrash className="h-4 w-4" />
                       </Button>
@@ -492,6 +505,60 @@ export default function UsersPage() {
               </Button>
             </ModalFooter>
           </form>
+        </ModalContent>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={deleteOpen}
+        onOpenChange={(open) => {
+          if (!open && !deleting) {
+            setDeleteOpen(false);
+            setUserToDelete(null);
+          }
+        }}
+        hideCloseButton={deleting}
+      >
+        <ModalContent>
+          {() => (
+            <>
+              <ModalHeader className="flex items-center gap-2">
+                <IconAlertTriangle className="h-5 w-5 text-danger" />
+                <span>Konfirmasi Hapus</span>
+              </ModalHeader>
+              <ModalBody>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Anda yakin ingin menghapus pengguna{' '}
+                  <span className="font-semibold">
+                    {userToDelete?.name} ({userToDelete?.email})
+                  </span>
+                  ? Tindakan ini tidak dapat dibatalkan.
+                </p>
+              </ModalBody>
+              <ModalFooter>
+                <Button
+                  variant="light"
+                  onPress={() => {
+                    if (!deleting) {
+                      setDeleteOpen(false);
+                      setUserToDelete(null);
+                    }
+                  }}
+                  disabled={deleting}
+                >
+                  Batal
+                </Button>
+                <Button
+                  color="danger"
+                  onPress={handleConfirmDelete}
+                  isLoading={deleting}
+                  disabled={deleting}
+                >
+                  {deleting ? 'Menghapus...' : 'Hapus'}
+                </Button>
+              </ModalFooter>
+            </>
+          )}
         </ModalContent>
       </Modal>
     </div>

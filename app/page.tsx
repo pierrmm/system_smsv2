@@ -1,39 +1,55 @@
 'use client';
 
-import { Divider } from "@heroui/divider";
-import { 
-  IconFileText, 
-  IconMail, 
-  IconSend, 
-  IconArchive,
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { AppLayout } from '@/components/AppLayout';
+import { useAuth } from '@/contexts/AuthContext';
+
+import { Card, CardHeader, CardBody } from '@heroui/card';
+import { Button } from '@heroui/button';
+import { Chip } from '@heroui/chip';
+import { Divider } from '@heroui/divider';
+import { Skeleton } from '@heroui/skeleton';
+import { Tooltip } from '@heroui/tooltip';
+
+import {
+  IconFileText,
   IconUsers,
   IconPlus,
-  IconTrendingUp,
   IconClock,
+  IconCalendar,
+  IconMapPin,
   IconEye,
   IconEdit,
-  IconCalendar,
-  IconMapPin
-} from "@tabler/icons-react";
-import Link from "next/link";
-import { Button } from "@heroui/button";
-import { Card, CardHeader, CardBody } from "@heroui/card";
-import { Chip } from "@heroui/chip";
-import { AppLayout } from "@/components/AppLayout";
-import { useAuth } from "@/contexts/AuthContext";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { Spinner } from "@heroui/spinner";
+  IconRefresh,
+  IconChevronRight,
+  IconArrowUpRight,
+  IconArrowDownRight
+} from '@tabler/icons-react';
+
+/* Design Tokens (sederhana) */
+const TOKENS = {
+  radius: 'rounded-md',
+  cardPadding: 'p-4',
+  gap: 'gap-4',
+  textMuted: 'text-gray-600 dark:text-gray-400',
+  border: 'border border-gray-200 dark:border-gray-700',
+  bgSoft: 'bg-white dark:bg-gray-800'
+};
 
 interface DashboardStats {
   totalLetters: number;
-  incomingLetters: number;
-  outgoingLetters: number;
-  archivedLetters: number;
   pendingLetters: number;
   approvedLetters: number;
   rejectedLetters: number;
   totalUsers: number;
+  previous?: {
+    totalLetters?: number;
+    pendingLetters?: number;
+    approvedLetters?: number;
+    rejectedLetters?: number;
+  };
 }
 
 interface PermissionLetter {
@@ -45,464 +61,451 @@ interface PermissionLetter {
   letter_type: string;
   status: string;
   created_at: string;
-  participants: Array<{
-    id: string;
-    name: string;
-    class: string;
-  }>;
+  participants: Array<{ id: string; name: string; class: string }>;
 }
 
+type StatusKey = 'approved' | 'pending' | 'rejected' | 'draft';
+
+const statusColor = (status: string) =>
+  ({
+    approved: 'success',
+    rejected: 'danger',
+    pending: 'warning',
+    draft: 'default'
+  }[status] || 'default');
+
+const statusLabel = (status: string) =>
+  ({
+    approved: 'Disetujui',
+    rejected: 'Ditolak',
+    pending: 'Menunggu',
+    draft: 'Draft'
+  }[status] || status);
+
+const typeLabel = (t: string) =>
+  ({
+    dispensasi: 'Dispensasi',
+    keterangan: 'Keterangan',
+    surat_tugas: 'Surat Tugas',
+    lomba: 'Izin Lomba'
+  }[t] || t);
+
+const formatDate = (d: string) => {
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return '-';
+  return dt.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
 export default function HomePage() {
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentLetters, setRecentLetters] = useState<PermissionLetter[]>([]);
   const [loadingData, setLoadingData] = useState(true);
-
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
-    }
-  }, [user, loading, router]);
-
-  useEffect(() => {
-    if (user) {
-      fetchDashboardData();
-    }
-  }, [user]);
-
-  const fetchDashboardData = async () => {
-    try {
-      setLoadingData(true);
-      
-      // Fetch stats
-      const statsResponse = await fetch('/api/dashboard/stats');
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json();
-        setStats(statsData);
-      }
-
-      // Fetch recent letters
-      const lettersResponse = await fetch('/api/permission-letters?limit=5');
-      if (lettersResponse.ok) {
-        const lettersData = await lettersResponse.json();
-        setRecentLetters(lettersData.letters || []);
-      }
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-    } finally {
-      setLoadingData(false);
-    }
-  };
+  const [refreshing, setRefreshing] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusKey | 'all'>('all');
 
   const isAdmin = () => user?.role === 'admin';
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'approved': return 'success';
-      case 'rejected': return 'danger';
-      case 'pending': return 'warning';
-      default: return 'default';
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      setLoadingData(true);
+      const [statsRes, lettersRes] = await Promise.all([
+        fetch('/api/dashboard/stats?withPrevious=1'),
+        fetch('/api/permission-letters?limit=50')
+      ]);
+      if (statsRes.ok) {
+        const s = await statsRes.json();
+        setStats(typeof s.totalLetters === 'number' ? s : null);
+      } else setStats(null);
+      if (lettersRes.ok) {
+        const l = await lettersRes.json();
+        setRecentLetters(Array.isArray(l.letters) ? l.letters : []);
+      } else setRecentLetters([]);
+    } catch {
+      setStats(null);
+      setRecentLetters([]);
+    } finally {
+      setLoadingData(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'approved': return 'Disetujui';
-      case 'rejected': return 'Ditolak';
-      case 'pending': return 'Menunggu';
-      case 'draft': return 'Draft';
-      default: return status;
+  useEffect(() => {
+    if (!authLoading && !user) router.push('/login');
+  }, [user, authLoading, router]);
+
+  useEffect(() => {
+    if (user) fetchDashboardData();
+  }, [user, fetchDashboardData]);
+
+  const derived = useMemo<DashboardStats>(() => {
+    if (!stats) {
+      const total = recentLetters.length;
+      const pending = recentLetters.filter(l => l.status === 'pending').length;
+      const approved = recentLetters.filter(l => l.status === 'approved').length;
+      const rejected = recentLetters.filter(l => l.status === 'rejected').length;
+      return { totalLetters: total, pendingLetters: pending, approvedLetters: approved, rejectedLetters: rejected, totalUsers: 0 };
     }
-  };
+    return stats;
+  }, [stats, recentLetters]);
 
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'dispensasi': return 'Dispensasi';
-      case 'keterangan': return 'Keterangan';
-      case 'surat_tugas': return 'Surat Tugas';
-      case 'lomba': return 'Izin Lomba';
-      default: return type;
+  const trendContext = useMemo(() => {
+    if (derived.previous) {
+      return {
+        current: {
+          totalLetters: derived.totalLetters,
+          pendingLetters: derived.pendingLetters,
+          approvedLetters: derived.approvedLetters,
+          rejectedLetters: derived.rejectedLetters
+        },
+        previous: derived.previous
+      };
     }
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
+    const now = Date.now();
+    const DAY = 86400000;
+    const last7 = recentLetters.filter(l => now - new Date(l.created_at).getTime() < 7 * DAY);
+    const prev7 = recentLetters.filter(l => {
+      const diff = now - new Date(l.created_at).getTime();
+      return diff >= 7 * DAY && diff < 14 * DAY;
     });
+    const count = (arr: PermissionLetter[], s: string) => arr.filter(l => l.status === s).length;
+    return {
+      current: {
+        totalLetters: last7.length || derived.totalLetters,
+        pendingLetters: count(last7, 'pending') || derived.pendingLetters,
+        approvedLetters: count(last7, 'approved') || derived.approvedLetters,
+        rejectedLetters: count(last7, 'rejected') || derived.rejectedLetters
+      },
+      previous: {
+        totalLetters: prev7.length,
+        pendingLetters: count(prev7, 'pending'),
+        approvedLetters: count(prev7, 'approved'),
+        rejectedLetters: count(prev7, 'rejected')
+      }
+    };
+  }, [derived, recentLetters]);
+
+  const computeTrend = (cur: number, prev?: number) => {
+    if (prev === undefined || prev === null) return null;
+    if (prev === 0 && cur === 0) return 0;
+    if (prev === 0) return 100;
+    return ((cur - prev) / prev) * 100;
   };
 
-  if (loading || loadingData) {
+  const trendData = useMemo(() => ({
+    total: computeTrend(trendContext.current.totalLetters, trendContext.previous.totalLetters),
+    pending: computeTrend(trendContext.current.pendingLetters, trendContext.previous.pendingLetters),
+    approved: computeTrend(trendContext.current.approvedLetters, trendContext.previous.approvedLetters),
+    rejected: computeTrend(trendContext.current.rejectedLetters, trendContext.previous.rejectedLetters)
+  }), [trendContext]);
+
+  const statusDistribution = useMemo(() => {
+    const counts: Record<StatusKey, number> = { approved: 0, pending: 0, rejected: 0, draft: 0 };
+    recentLetters.forEach(l => {
+      const s = l.status as StatusKey;
+      if (counts[s] !== undefined) counts[s] += 1;
+    });
+    const total = Object.values(counts).reduce((a, b) => a + b, 0) || 1;
+    return { counts, total };
+  }, [recentLetters]);
+
+  const filteredRecent = useMemo(
+    () => statusFilter === 'all' ? recentLetters : recentLetters.filter(l => l.status === statusFilter),
+    [recentLetters, statusFilter]
+  );
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchDashboardData();
+  };
+
+  if (authLoading || (loadingData && !stats && recentLetters.length === 0)) {
     return (
       <AppLayout>
-        <div className="flex justify-center items-center min-h-96">
-          <div className="text-center">
-            <Spinner size="lg" color="primary" />
-            <p className="mt-4 text-gray-600 dark:text-gray-400">Memuat dashboard...</p>
+        <div className="space-y-6">
+          <Skeleton className="h-7 w-44 rounded" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded" />)}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Skeleton className="h-80 rounded lg:col-span-2" />
+            <Skeleton className="h-80 rounded" />
           </div>
         </div>
       </AppLayout>
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   return (
     <AppLayout>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Dashboard Sistem Surat
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Selamat datang, {user.name}! Kelola surat menyurat dengan mudah dan efisien.
-          </p>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card>
-            <CardBody className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
-                    Total Surat
-                  </p>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                    {stats?.totalLetters || 0}
-                  </p>
-                  <div className="flex items-center mt-3">
-                    <IconTrendingUp className="h-4 w-4 text-green-500 mr-1" />
-                    <span className="text-sm text-green-500 font-medium">
-                      +12% bulan ini
-                    </span>
-                  </div>
-                </div>
-                <div className="p-4 rounded-xl bg-blue-500/10">
-                  <IconFileText className="h-8 w-8 text-blue-500" />
-                </div>
-              </div>
-            </CardBody>
-          </Card>
-
-          <Card>
-            <CardBody className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
-                    Menunggu Persetujuan
-                  </p>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                    {stats?.pendingLetters || 0}
-                  </p>
-                  <div className="flex items-center mt-3">
-                    <IconClock className="h-4 w-4 text-yellow-500 mr-1" />
-                    <span className="text-sm text-yellow-500 font-medium">
-                      Perlu tindakan
-                    </span>
-                  </div>
-                </div>
-                <div className="p-4 rounded-xl bg-yellow-500/10">
-                  <IconClock className="h-8 w-8 text-yellow-500" />
-                </div>
-              </div>
-            </CardBody>
-          </Card>
-
-          <Card>
-            <CardBody className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
-                    Disetujui
-                  </p>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                    {stats?.approvedLetters || 0}
-                  </p>
-                  <div className="flex items-center mt-3">
-                    <IconTrendingUp className="h-4 w-4 text-green-500 mr-1" />
-                    <span className="text-sm text-green-500 font-medium">
-                      +8% bulan ini
-                    </span>
-                  </div>
-                </div>
-                <div className="p-4 rounded-xl bg-green-500/10">
-                  <IconSend className="h-8 w-8 text-green-500" />
-                </div>
-              </div>
-            </CardBody>
-          </Card>
-
-          <Card>
-            <CardBody className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
-                    Arsip
-                  </p>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                    {stats?.archivedLetters || 0}
-                  </p>
-                  <div className="flex items-center mt-3">
-                    <IconArchive className="h-4 w-4 text-gray-500 mr-1" />
-                    <span className="text-sm text-gray-500 font-medium">
-                      Tersimpan
-                    </span>
-                  </div>
-                </div>
-                <div className="p-4 rounded-xl bg-gray-500/10">
-                  <IconArchive className="h-8 w-8 text-gray-500" />
-                </div>
-              </div>
-            </CardBody>
-          </Card>
-        </div>
-
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Recent Letters - Takes 2 columns */}
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    Surat Terbaru
-                  </h3>
-                  <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">
-                    Daftar surat yang baru dibuat atau diperbarui
-                  </p>
-                </div>
-                <Link href="/letters/permissions">
-                  <Button color="primary" variant="flat" size="sm">
-                    Lihat Semua
-                  </Button>
-                </Link>
-              </CardHeader>
-              <CardBody>
-                {recentLetters.length === 0 ? (
-                  <div className="text-center py-12">
-                    <IconFileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                    <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                      Belum ada surat
-                    </h4>
-                    <p className="text-gray-600 dark:text-gray-400 mb-6">
-                      Mulai dengan membuat surat izin pertama Anda
-                    </p>
-                    <Link href="/letters/permissions/create">
-                      <Button 
-                        color="primary"
-                        startContent={<IconPlus className="h-4 w-4" />}
-                      >
-                                               Buat Surat
-                      </Button>
-                    </Link>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {recentLetters.map((letter) => (
-                      <div key={letter.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <h4 className="font-semibold text-gray-900 dark:text-white">
-                                {letter.letter_number}
-                              </h4>
-                              <Chip
-                                color={getStatusColor(letter.status)}
-                                size="sm"
-                                variant="flat"
-                              >
-                                {getStatusLabel(letter.status)}
-                              </Chip>
-                              <Chip size="sm" variant="bordered">
-                                {getTypeLabel(letter.letter_type)}
-                              </Chip>
-                            </div>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-gray-600 dark:text-gray-400 mb-3">
-                              <div className="flex items-center gap-2">
-                                <IconFileText className="h-4 w-4" />
-                                <span>{letter.activity}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <IconMapPin className="h-4 w-4" />
-                                <span>{letter.location}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <IconCalendar className="h-4 w-4" />
-                                <span>{formatDate(letter.date)}</span>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <IconUsers className="h-4 w-4 text-gray-400" />
-                              <span className="text-sm text-gray-600 dark:text-gray-400">
-                                {letter.participants.length} peserta
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="flex gap-2 ml-4">
-                            <Link href={`/letters/permissions/${letter.id}`}>
-                              <Button
-                                size="sm"
-                                variant="flat"
-                                color="primary"
-                                isIconOnly
-                              >
-                                <IconEye className="h-4 w-4" />
-                              </Button>
-                            </Link>
-                            <Link href={`/letters/permissions/${letter.id}/edit`}>
-                              <Button
-                                size="sm"
-                                variant="flat"
-                                color="warning"
-                                isIconOnly
-                              >
-                                <IconEdit className="h-4 w-4" />
-                              </Button>
-                            </Link>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardBody>
-            </Card>
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Dashboard</h1>
+            <p className={`text-sm ${TOKENS.textMuted}`}>Halo, {user.name}. Ringkasan singkat sistem.</p>
           </div>
+          <div className="flex gap-2">
+            <Button
+              variant="flat"
+              color="default"
+              startContent={<IconRefresh className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />}
+              onPress={handleRefresh}
+              isDisabled={refreshing}
+            >
+              Refresh
+            </Button>
+            <Button
+              as={Link}
+              href="/letters/permissions/create"
+              color="primary"
+              startContent={<IconPlus className="h-4 w-4" />}
+            >
+              Buat Surat
+            </Button>
+          </div>
+        </header>
 
-          {/* Sidebar - Takes 1 column */}
+        {/* Stats Row */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatCard title="Total Surat" value={trendContext.current.totalLetters} trend={trendData.total} icon={<IconFileText className="h-5 w-5 text-gray-500" />} />
+          <StatCard title="Menunggu" value={trendContext.current.pendingLetters} trend={trendData.pending} icon={<IconClock className="h-5 w-5 text-gray-500" />} />
+          <StatCard title="Disetujui" value={trendContext.current.approvedLetters} trend={trendData.approved} icon={<IconFileText className="h-5 w-5 text-gray-500" />} />
+          <StatCard title="Ditolak" value={trendContext.current.rejectedLetters} trend={trendData.rejected} icon={<IconFileText className="h-5 w-5 text-gray-500" />} />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Recent Letters */}
+          <Card className="lg:col-span-2">
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Surat Terbaru</h3>
+                <p className={`text-xs ${TOKENS.textMuted}`}>8 entri terbaru</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(['all', 'pending', 'approved', 'rejected', 'draft'] as const).map(s => (
+                  <Chip
+                    key={s}
+                    size="sm"
+                    variant={statusFilter === s ? 'solid' : 'bordered'}
+                    color={s === 'all' ? 'default' : statusColor(s)}
+                    onClick={() => setStatusFilter(s)}
+                    className="cursor-pointer"
+                  >
+                    {s === 'all' ? 'Semua' : statusLabel(s)}
+                  </Chip>
+                ))}
+              </div>
+            </CardHeader>
+            <Divider />
+            <CardBody className="space-y-3">
+              {filteredRecent.length === 0 && (
+                <div className="py-12 text-center">
+                  <IconFileText className="h-10 w-10 text-gray-400 mx-auto mb-3" />
+                  <p className={`text-sm ${TOKENS.textMuted}`}>Tidak ada data</p>
+                </div>
+              )}
+              {filteredRecent.slice(0, 8).map(letter => (
+                <div
+                  key={letter.id}
+                  className={`${TOKENS.border} ${TOKENS.bgSoft} ${TOKENS.radius} p-3 relative hover:shadow-sm transition`}
+                >
+                  <div className="flex justify-between gap-4">
+                    <div className="flex-1 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="text-sm font-medium text-gray-900 dark:text-white">{letter.letter_number}</h4>
+                        <Chip size="sm" color={statusColor(letter.status)} variant="flat">
+                          {statusLabel(letter.status)}
+                        </Chip>
+                        <Chip size="sm" variant="bordered">
+                          {typeLabel(letter.letter_type)}
+                        </Chip>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-gray-600 dark:text-gray-400">
+                        <InfoIcon icon={<IconFileText className="h-3.5 w-3.5" />} text={letter.activity} />
+                        <InfoIcon icon={<IconMapPin className="h-3.5 w-3.5" />} text={letter.location} />
+                        <InfoIcon icon={<IconCalendar className="h-3.5 w-3.5" />} text={formatDate(letter.date)} />
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
+                        <IconUsers className="h-3.5 w-3.5" />
+                        <span>{letter.participants?.length || 0} peserta</span>
+                        <span className="mx-1">•</span>
+                        <span>{formatDate(letter.created_at)}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <Tooltip content="Detail" size="sm">
+                        <Button
+                          as={Link}
+                          href={`/letters/permissions/${letter.id}`}
+                          size="sm"
+                          isIconOnly
+                          variant="flat"
+                          color="primary"
+                        >
+                          <IconEye className="h-4 w-4" />
+                        </Button>
+                      </Tooltip>
+                      {isAdmin() && (
+                        <Tooltip content="Edit" size="sm">
+                          <Button
+                            as={Link}
+                            href={`/letters/permissions/${letter.id}/edit`}
+                            size="sm"
+                            isIconOnly
+                            variant="flat"
+                            color="default"
+                          >
+                            <IconEdit className="h-4 w-4" />
+                          </Button>
+                        </Tooltip>
+                      )}
+                    </div>
+                  </div>
+                  <Link
+                    href={`/letters/permissions/${letter.id}`}
+                    className="absolute inset-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    aria-label="Buka detail"
+                  />
+                </div>
+              ))}
+              <div className="pt-1">
+                <Button
+                  as={Link}
+                  href="/letters/permissions"
+                  variant="light"
+                  endContent={<IconChevronRight className="h-4 w-4" />}
+                  size="sm"
+                >
+                  Lihat Semua
+                </Button>
+              </div>
+            </CardBody>
+          </Card>
+
+          {/* Sidebar */}
           <div className="space-y-6">
-            {/* Quick Actions */}
-            <Card>
-              <CardHeader>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  Tindakan Cepat
-                </h3>
-              </CardHeader>
-              <CardBody className="space-y-3">
-                <Link href="/letters/permissions/create" className="block">
-                  <Button 
-                    className="w-full justify-start" 
-                    variant="flat"
-                    startContent={<IconPlus className="h-4 w-4" />}
-                  >
-                    Buat Surat Izin
-                  </Button>
-                </Link>
-                <Link href="/letters/permissions" className="block">
-                  <Button 
-                    className="w-full justify-start" 
-                    variant="flat"
-                    startContent={<IconFileText className="h-4 w-4" />}
-                  >
-                    Kelola Surat
-                  </Button>
-                </Link>
-              </CardBody>
-            </Card>
+            <SimpleCard title="Distribusi Status">
+              <div className="space-y-3">
+                {(['approved', 'pending', 'rejected', 'draft'] as StatusKey[]).map(st => {
+                  const value = statusDistribution.counts[st];
+                  const pct = (value / statusDistribution.total) * 100;
+                  return (
+                    <div key={st} className="space-y-1">
+                      <div className="flex justify-between text-[11px] text-gray-600 dark:text-gray-400">
+                        <span>{statusLabel(st)}</span>
+                        <span>{value} ({pct.toFixed(0)}%)</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-gray-200 dark:bg-gray-700 rounded overflow-hidden">
+                        <div className="h-full bg-gray-500 transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </SimpleCard>
 
-            {/* Progress Bulanan */}
-            <Card>
-              <CardHeader>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  Progress Bulanan
-                </h3>
-              </CardHeader>
-              <CardBody className="space-y-6">
-                <div>
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                      Surat Diproses
-                    </span>
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                      {stats?.approvedLetters || 0}/{(stats?.totalLetters || 0)}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div 
-                      className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
-                      style={{
-                        width: `${stats?.totalLetters ? (stats.approvedLetters / stats.totalLetters) * 100 : 0}%`
-                      }}
-                    ></div>
-                  </div>
-                </div>
-                
-                <div>
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                      Menunggu Approval
-                    </span>
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                      {stats?.pendingLetters || 0}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div 
-                      className="bg-yellow-500 h-2 rounded-full transition-all duration-300" 
-                      style={{
-                        width: `${stats?.totalLetters ? (stats.pendingLetters / stats.totalLetters) * 100 : 0}%`
-                      }}
-                    ></div>
-                  </div>
-                </div>
-                
-                <div>
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                      Ditolak
-                    </span>
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                      {stats?.rejectedLetters || 0}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div 
-                      className="bg-red-500 h-2 rounded-full transition-all duration-300" 
-                      style={{
-                        width: `${stats?.totalLetters ? (stats.rejectedLetters / stats.totalLetters) * 100 : 0}%`
-                      }}
-                    ></div>
-                  </div>
-                </div>
-              </CardBody>
-            </Card>
+            <SimpleCard title="Progress Bulanan">
+              <div className="space-y-3">
+                <ProgressLine label="Selesai" current={derived.approvedLetters} total={derived.totalLetters} />
+                <ProgressLine label="Menunggu" current={derived.pendingLetters} total={derived.totalLetters} />
+                <ProgressLine label="Ditolak" current={derived.rejectedLetters} total={derived.totalLetters} />
+              </div>
+            </SimpleCard>
 
-            {/* System Info */}
-            <Card>
-              <CardHeader>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  Informasi Sistem
-                </h3>
-              </CardHeader>
-              <CardBody className="space-y-4">
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Total Pengguna</span>
-                  <span className="text-sm text-gray-900 dark:text-white font-medium">
-                    {stats?.totalUsers || 0}
-                  </span>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Update Terakhir</span>
-                  <span className="text-sm text-gray-900 dark:text-white font-medium">
-                    {new Date().toLocaleDateString('id-ID')}
-                  </span>
-                </div>
-              </CardBody>
-            </Card>
+            <SimpleCard title="Informasi Sistem">
+              <div className="space-y-2">
+                <InfoRow label="Total Pengguna" value={(derived.totalUsers ?? 0).toString()} />
+                <InfoRow label="Created by" value="pierre" />
+                <InfoRow label="Update" value={new Date().toLocaleDateString('id-ID')} />
+              </div>
+            </SimpleCard>
           </div>
         </div>
       </div>
     </AppLayout>
+  );
+}
+
+/* Reusable */
+function StatCard({ title, value, icon, trend }: { title: string; value: number; icon: React.ReactNode; trend: number | null }) {
+  const positive = (trend ?? 0) > 0;
+  const negative = (trend ?? 0) < 0;
+  return (
+    <Card className="border border-gray-200 dark:border-gray-700 shadow-sm">
+      <CardBody className="p-4 flex flex-col gap-2">
+        <div className="flex items-start justify-between">
+          <span className="text-xs font-medium text-gray-600 dark:text-gray-400">{title}</span>
+          <div className="p-2 rounded bg-gray-100 dark:bg-gray-800">{icon}</div>
+        </div>
+        <div className="text-2xl font-semibold text-gray-900 dark:text-white">{value}</div>
+        {trend !== null && (
+          <div className="flex items-center gap-1 text-[11px]">
+            {trend === 0 && <span className="text-gray-500">0%</span>}
+            {positive && (
+              <>
+                <IconArrowUpRight className="h-4 w-4 text-green-600" />
+                <span className="text-green-600 font-medium">+{Math.abs(trend).toFixed(1)}%</span>
+              </>
+            )}
+            {negative && (
+              <>
+                <IconArrowDownRight className="h-4 w-4 text-red-600" />
+                <span className="text-red-600 font-medium">-{Math.abs(trend).toFixed(1)}%</span>
+              </>
+            )}
+            <span className="text-gray-500">vs prev</span>
+          </div>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+function SimpleCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <Card>
+      <CardHeader className="py-3">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
+      </CardHeader>
+      <Divider />
+      <CardBody className="space-y-2">{children}</CardBody>
+    </Card>
+  );
+}
+
+function ProgressLine({ label, current, total }: { label: string; current: number; total: number }) {
+  const pct = total ? (current / total) * 100 : 0;
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between text-[11px] text-gray-600 dark:text-gray-400">
+        <span>{label}</span>
+        <span>{current}/{total || 0}</span>
+      </div>
+      <div className="h-1.5 w-full bg-gray-200 dark:bg-gray-700 rounded overflow-hidden">
+        <div className="h-full bg-gray-500 transition-all" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between text-xs">
+      <span className="text-gray-600 dark:text-gray-400">{label}</span>
+      <span className="font-medium text-gray-900 dark:text-white">{value}</span>
+    </div>
+  );
+}
+
+function InfoIcon({ icon, text }: { icon: React.ReactNode; text: string }) {
+  return (
+    <div className="flex items-center gap-1 truncate">
+      {icon}
+      <span className="truncate">{text || '-'}</span>
+    </div>
   );
 }

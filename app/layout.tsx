@@ -1,5 +1,5 @@
 import "@/styles/globals.css";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import clsx from "clsx";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -40,7 +40,7 @@ export default function RootLayout({
       <body
         className={clsx(
           inter.className,
-          "min-h-screen bg-background font-sans antialiased",
+          "min-h-dvh bg-background font-sans antialiased overflow-y-auto touch-pan-y",
           fontSans.variable,
         )}
       >

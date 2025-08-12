@@ -1,16 +1,31 @@
 'use client';
 
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo
+} from 'react';
 import Link from 'next/link';
-import React, { useState, useEffect } from 'react';
-import { Chip } from '@heroui/chip';
-import { Button } from '@heroui/button';
-import { Card, CardBody, CardHeader } from '@heroui/card';
 import { AppLayout } from '@/components/AppLayout';
+import { useAuth } from '@/contexts/AuthContext';
+
+import { Card, CardBody } from '@heroui/card';
+import { Button } from '@heroui/button';
+import { Chip } from '@heroui/chip';
 import { Select, SelectItem } from '@heroui/select';
 import { Input } from '@heroui/input';
-import { 
-  IconPlus, 
-  IconSearch, 
+import {
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter
+} from '@heroui/modal';
+
+import {
+  IconPlus,
+  IconSearch,
   IconEye,
   IconEdit,
   IconTrash,
@@ -18,7 +33,18 @@ import {
   IconFilter,
   IconUser
 } from '@tabler/icons-react';
-import { useAuth } from '@/contexts/AuthContext';
+
+interface Participant {
+  id: string;
+  name: string;
+  class: string;
+}
+
+interface Creator {
+  id: string;
+  name: string;
+  email: string;
+}
 
 interface PermissionLetter {
   id: string;
@@ -30,136 +56,150 @@ interface PermissionLetter {
   status: string;
   created_at: string;
   created_by: string;
-  creator: {
-    id: string;
-    name: string;
-    email: string;
-  };
-  participants: Array<{
-    id: string;
-    name: string;
-    class: string;
-  }>;
+  creator: Creator;
+  participants: Participant[];
 }
+
+type HeroUIColor = 'default' | 'primary' | 'secondary' | 'success' | 'warning' | 'danger';
+
+const statusColor = (status: string): HeroUIColor =>
+  ({
+    approved: 'success',
+    rejected: 'danger',
+    pending: 'warning',
+    draft: 'default'
+  }[status] as HeroUIColor) || 'default';
+
+const statusLabel = (status: string) =>
+  ({
+    approved: 'Disetujui',
+    rejected: 'Ditolak',
+    pending: 'Menunggu',
+    draft: 'Draft'
+  }[status] || status);
+
+const typeLabel = (type: string) =>
+  ({
+    dispensasi: 'Dispensasi',
+    keterangan: 'Keterangan',
+    surat_tugas: 'Surat Tugas',
+    lomba: 'Izin Lomba'
+  }[type] || type);
+
+const formatDate = (dateString: string) => {
+  if (!dateString) return '-';
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return dateString;
+  return d.toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  });
+};
 
 export default function PermissionLettersPage() {
   const { user, isAdmin } = useAuth();
   const [letters, setLetters] = useState<PermissionLetter[]>([]);
   const [loading, setLoading] = useState(true);
+
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
-  const letterTypes = [
-    { key: '', label: 'Semua Jenis' },
-    { key: 'dispensasi', label: 'Surat Dispensasi' },
-    { key: 'keterangan', label: 'Surat Keterangan' },
-    { key: 'surat_tugas', label: 'Surat Tugas' },
-    { key: 'lomba', label: 'Surat Izin Lomba' }
-  ];
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [letterToDelete, setLetterToDelete] = useState<PermissionLetter | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const statusOptions = [
-    { key: '', label: 'Semua Status' },
-    { key: 'draft', label: 'Draft' },
-    { key: 'pending', label: 'Menunggu' },
-    { key: 'approved', label: 'Disetujui' },
-    { key: 'rejected', label: 'Ditolak' }
-  ];
+  const letterTypes = useMemo(
+    () => [
+      { key: '', label: 'Semua Jenis' },
+      { key: 'dispensasi', label: 'Surat Dispensasi' },
+      { key: 'keterangan', label: 'Surat Keterangan' },
+      { key: 'surat_tugas', label: 'Surat Tugas' },
+      { key: 'lomba', label: 'Surat Izin Lomba' }
+    ],
+    []
+  );
 
-  const fetchLetters = async () => {
+  const statusOptions = useMemo(
+    () => [
+      { key: '', label: 'Semua Status' },
+      { key: 'draft', label: 'Draft' },
+      { key: 'pending', label: 'Menunggu' },
+      { key: 'approved', label: 'Disetujui' },
+      { key: 'rejected', label: 'Ditolak' }
+    ],
+    []
+  );
+
+  const fetchLetters = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
       if (search) params.append('search', search);
       if (typeFilter) params.append('type', typeFilter);
       if (statusFilter) params.append('status', statusFilter);
-
-      const response = await fetch(`/api/permission-letters?${params}`);
-      if (response.ok) {
-        const data = await response.json();
-        setLetters(data.letters || []);
+      const res = await fetch(`/api/permission-letters?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLetters(Array.isArray(data.letters) ? data.letters : []);
+      } else {
+        setLetters([]);
       }
-    } catch (error) {
-      console.error('Error fetching letters:', error);
+    } catch (e) {
+      console.error('Error fetching letters:', e);
+      setLetters([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [search, typeFilter, statusFilter]);
 
   useEffect(() => {
     fetchLetters();
-  }, [search, typeFilter, statusFilter]);
+  }, [fetchLetters]);
 
-  const handleDelete = async (letterId: string) => {
-    if (!isAdmin()) {
-      alert('Hanya admin yang dapat menghapus surat');
-      return;
-    }
-
-    if (confirm('Apakah Anda yakin ingin menghapus surat ini?')) {
-      try {
-        const response = await fetch(`/api/permission-letters/${letterId}`, {
-          method: 'DELETE',
-        });
-
-        if (response.ok) {
-          await fetchLetters();
-        } else {
-          alert('Gagal menghapus surat');
-        }
-      } catch (error) {
-        console.error('Error deleting letter:', error);
-        alert('Terjadi kesalahan saat menghapus surat');
+  const askDelete = useCallback(
+    (letter: PermissionLetter) => {
+      if (!isAdmin()) {
+        alert('Hanya admin yang dapat menghapus surat');
+        return;
       }
+      setLetterToDelete(letter);
+      setConfirmOpen(true);
+    },
+    [isAdmin]
+  );
+
+  const confirmDelete = useCallback(async () => {
+    if (!letterToDelete) return;
+    try {
+      setDeleting(true);
+      const res = await fetch(`/api/permission-letters/${letterToDelete.id}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) {
+        alert('Gagal menghapus surat');
+      } else {
+        setConfirmOpen(false);
+        setLetterToDelete(null);
+        fetchLetters();
+      }
+    } catch (e) {
+      console.error('Error deleting letter:', e);
+      alert('Terjadi kesalahan saat menghapus surat');
+    } finally {
+      setDeleting(false);
     }
-  };
+  }, [letterToDelete, fetchLetters]);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'approved': return 'success';
-      case 'rejected': return 'danger';
-      case 'pending': return 'warning';
-      default: return 'default';
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'approved': return 'Disetujui';
-      case 'rejected': return 'Ditolak';
-      case 'pending': return 'Menunggu';
-      case 'draft': return 'Draft';
-      default: return status;
-    }
-  };
-
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'dispensasi': return 'Dispensasi';
-      case 'keterangan': return 'Keterangan';
-      case 'surat_tugas': return 'Surat Tugas';
-      case 'lomba': return 'Izin Lomba';
-      default: return type;
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
-    });
-  };
-
-  const canEditOrDelete = (letter: PermissionLetter) => {
-    return isAdmin() || letter.created_by === user?.id;
-  };
+  const canEditOrDelete = (letter: PermissionLetter) =>
+    isAdmin() || letter.created_by === user?.id;
 
   return (
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
               Surat Izin
@@ -168,85 +208,88 @@ export default function PermissionLettersPage() {
               Kelola surat izin siswa dan kegiatan sekolah
             </p>
           </div>
-          <Link href="/letters/permissions/create">
             <Button
+              as={Link}
+              href="/letters/permissions/create"
               color="primary"
               startContent={<IconPlus className="h-5 w-5" />}
             >
               Buat Surat Izin
             </Button>
-          </Link>
         </div>
 
-        {/* Filters */}
+        {/* Filter */}
         <Card>
           <CardBody className="p-6">
-            <div className="flex flex-col lg:flex-row gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <Input
                 placeholder="Cari surat..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 startContent={<IconSearch className="h-4 w-4 text-gray-400" />}
-                className="flex-1"
               />
-              
               <Select
                 placeholder="Filter Jenis"
                 selectedKeys={typeFilter ? [typeFilter] : []}
                 onSelectionChange={(keys) => {
-                  const selectedKey = Array.from(keys)[0] as string;
-                  setTypeFilter(selectedKey || '');
+                  const key = Array.from(keys)[0] as string;
+                  setTypeFilter(key || '');
                 }}
-                className="min-w-48"
                 startContent={<IconFilter className="h-4 w-4" />}
               >
-                {letterTypes.map((type) => (
-                  <SelectItem key={type.key} value={type.key}>
-                    {type.label}
-                  </SelectItem>
+                {letterTypes.map((t) => (
+                  <SelectItem key={t.key}>{t.label}</SelectItem>
                 ))}
               </Select>
-
               <Select
                 placeholder="Filter Status"
                 selectedKeys={statusFilter ? [statusFilter] : []}
                 onSelectionChange={(keys) => {
-                  const selectedKey = Array.from(keys)[0] as string;
-                  setStatusFilter(selectedKey || '');
+                  const key = Array.from(keys)[0] as string;
+                  setStatusFilter(key || '');
                 }}
-                className="min-w-48"
                 startContent={<IconFilter className="h-4 w-4" />}
               >
-                {statusOptions.map((status) => (
-                  <SelectItem key={status.key} value={status.key}>
-                    {status.label}
-                  </SelectItem>
+                {statusOptions.map((s) => (
+                  <SelectItem key={s.key}>{s.label}</SelectItem>
                 ))}
               </Select>
-
-              {(search || typeFilter || statusFilter) && (
-                <Button
-                  variant="light"
-                  onPress={() => {
-                    setSearch('');
-                    setTypeFilter('');
-                    setStatusFilter('');
-                  }}
-                >
-                  Reset Filter
-                </Button>
-              )}
+              <div className="flex items-stretch">
+                {search || typeFilter || statusFilter ? (
+                  <Button
+                    fullWidth
+                    variant="flat"
+                    onPress={() => {
+                      setSearch('');
+                      setTypeFilter('');
+                      setStatusFilter('');
+                    }}
+                  >
+                    Reset Filter
+                  </Button>
+                ) : (
+                  <Button fullWidth variant="bordered" isDisabled>
+                    Tidak ada filter
+                  </Button>
+                )}
+              </div>
             </div>
           </CardBody>
         </Card>
 
-        {/* Letters List */}
+        {/* List */}
         <div className="space-y-4">
-          {loading ? (
-            <div className="text-center py-12">
-              <p className="text-gray-600 dark:text-gray-400">Memuat surat...</p>
-            </div>
-          ) : letters.length === 0 ? (
+          {loading && (
+            <Card>
+              <CardBody className="py-12 text-center">
+                <p className="text-gray-600 dark:text-gray-400">
+                  Memuat surat...
+                </p>
+              </CardBody>
+            </Card>
+          )}
+
+          {!loading && letters.length === 0 && (
             <Card>
               <CardBody className="text-center py-12">
                 <IconSearch className="h-16 w-16 text-gray-400 mx-auto mb-4" />
@@ -258,38 +301,42 @@ export default function PermissionLettersPage() {
                 </p>
               </CardBody>
             </Card>
-          ) : (
+          )}
+
+          {!loading &&
             letters.map((letter) => (
-              <Card key={letter.id} className="hover:shadow-md transition-shadow">
-                <CardBody className="p-6">
-                  <div className="flex justify-between items-start">
+              <Card
+                key={letter.id}
+                className="hover:shadow-md transition-shadow"
+              >
+                <CardBody className="p-6 space-y-4">
+                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                     <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-3">
-                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                      <div className="flex flex-wrap items-center gap-2 mb-3">
+                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mr-2">
                           {letter.letter_number}
                         </h3>
                         <Chip
-                          color={getStatusColor(letter.status)}
+                          color={statusColor(letter.status)}
                           size="sm"
                           variant="flat"
                         >
-                          {getStatusLabel(letter.status)}
+                          {statusLabel(letter.status)}
                         </Chip>
                         <Chip size="sm" variant="bordered">
-                          {getTypeLabel(letter.letter_type)}
+                          {typeLabel(letter.letter_type)}
                         </Chip>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                         <div>
-                                                   <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                          <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
                             Kegiatan:
                           </p>
                           <p className="text-gray-900 dark:text-white">
                             {letter.activity}
                           </p>
                         </div>
-                        
                         <div>
                           <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
                             Lokasi:
@@ -298,7 +345,6 @@ export default function PermissionLettersPage() {
                             {letter.location}
                           </p>
                         </div>
-                        
                         <div>
                           <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
                             Tanggal:
@@ -309,37 +355,43 @@ export default function PermissionLettersPage() {
                         </div>
                       </div>
 
-                      {/* Creator Info */}
-                      <div className="flex items-center gap-2 mb-4">
+                      <div className="flex flex-wrap items-center gap-2 mb-4">
                         <IconUser className="h-4 w-4 text-gray-400" />
                         <span className="text-sm text-gray-600 dark:text-gray-400">
                           Dibuat oleh:
                         </span>
                         <span className="text-sm font-medium text-gray-900 dark:text-white">
-                          {letter.creator.name}
+                          {letter.creator?.name || '-'}
                         </span>
-                        <span className="text-sm text-gray-500 dark:text-gray-400">
-                          ({letter.creator.email})
-                        </span>
+                        {letter.creator?.email && (
+                          <span className="text-sm text-gray-500 dark:text-gray-400">
+                            ({letter.creator.email})
+                          </span>
+                        )}
                       </div>
 
-                      {/* Participants */}
                       <div>
                         <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
                           Peserta:
                         </p>
                         <div className="flex flex-wrap gap-2">
-                          {letter.participants.map((participant, index) => (
-                            <Chip key={participant.id} size="sm" variant="flat">
-                              {participant.name} ({participant.class})
+                          {(letter.participants || []).map((p) => (
+                            <Chip key={p.id} size="sm" variant="flat">
+                              {p.name} ({p.class})
                             </Chip>
                           ))}
+                          {(!letter.participants ||
+                            letter.participants.length === 0) && (
+                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                              Tidak ada peserta
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex gap-2 ml-4">
+                    {/* Actions */}
+                    <div className="flex flex-row lg:flex-col gap-2 shrink-0">
                       <Button
                         size="sm"
                         variant="light"
@@ -350,7 +402,6 @@ export default function PermissionLettersPage() {
                       >
                         <IconEye className="h-4 w-4" />
                       </Button>
-                      
                       {canEditOrDelete(letter) && (
                         <Button
                           size="sm"
@@ -363,24 +414,23 @@ export default function PermissionLettersPage() {
                           <IconEdit className="h-4 w-4" />
                         </Button>
                       )}
-                      
                       {isAdmin() && (
                         <Button
                           size="sm"
                           variant="light"
                           color="danger"
                           isIconOnly
-                          onPress={() => handleDelete(letter.id)}
+                          onPress={() => askDelete(letter)}
                         >
                           <IconTrash className="h-4 w-4" />
                         </Button>
                       )}
-                      
                       <Button
                         size="sm"
                         variant="light"
                         color="success"
                         isIconOnly
+                        // onPress={() => download logic}
                       >
                         <IconDownload className="h-4 w-4" />
                       </Button>
@@ -388,9 +438,62 @@ export default function PermissionLettersPage() {
                   </div>
                 </CardBody>
               </Card>
-            ))
-          )}
+            ))}
         </div>
+
+        {/* Modal Konfirmasi Hapus */}
+        <Modal
+          isOpen={confirmOpen}
+          onOpenChange={(open) => {
+            if (!open && !deleting) {
+              setConfirmOpen(false);
+              setLetterToDelete(null);
+            }
+          }}
+          placement="center"
+          hideCloseButton={deleting}
+        >
+          <ModalContent>
+            {() => (
+              <>
+                <ModalHeader className="flex flex-col gap-1">
+                  Konfirmasi Hapus
+                </ModalHeader>
+                <ModalBody>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Anda yakin ingin menghapus surat{' '}
+                    <span className="font-semibold">
+                      {letterToDelete?.letter_number}
+                    </span>
+                    ? Tindakan ini tidak dapat dibatalkan.
+                  </p>
+                </ModalBody>
+                <ModalFooter>
+                  <Button
+                    variant="light"
+                    onPress={() => {
+                      if (!deleting) {
+                        setConfirmOpen(false);
+                        setLetterToDelete(null);
+                      }
+                    }}
+                    disabled={deleting}
+                  >
+                    Batal
+                  </Button>
+                  <Button
+                    color="danger"
+                    onPress={confirmDelete}
+                    isLoading={deleting}
+                    disabled={deleting}
+                  >
+                    {deleting ? 'Menghapus...' : 'Hapus'}
+                  </Button>
+                </ModalFooter>
+              </>
+            )}
+          </ModalContent>
+        </Modal>
       </div>
     </AppLayout>
   );

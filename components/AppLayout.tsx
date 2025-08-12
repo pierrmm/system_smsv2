@@ -66,7 +66,11 @@ export function AppLayout({ children }: AppLayoutProps) {
   ];
 
   return (
-    <div className={cn("flex flex-col md:flex-row bg-gray-100 dark:bg-neutral-800 w-full flex-1 max-w-full mx-auto border border-neutral-200 dark:border-neutral-700 overflow-hidden h-screen")}>
+    <div
+      className={cn(
+        "flex flex-col md:flex-row bg-gray-100 dark:bg-neutral-800 w-full flex-1 max-w-full mx-auto border border-neutral-200 dark:border-neutral-700 min-h-dvh supports-[min-height:100dvh]:min-h-[100dvh] md:h-screen overflow-x-hidden"
+      )}
+    >
       <Sidebar open={open} setOpen={setOpen}>
         <SidebarBody className="justify-between gap-10">
           <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
