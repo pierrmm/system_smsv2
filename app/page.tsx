@@ -62,6 +62,7 @@ interface PermissionLetter {
   status: string;
   created_at: string;
   participants: Array<{ id: string; name: string; class: string }>;
+  created_by?: string; // ditambahkan
 }
 
 type StatusKey = 'approved' | 'pending' | 'rejected' | 'draft';
@@ -105,15 +106,22 @@ export default function HomePage() {
   const [loadingData, setLoadingData] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusKey | 'all'>('all');
+  // pagination dihapus: hanya tampilkan 4 item
 
   const isAdmin = () => user?.role === 'admin';
 
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoadingData(true);
+      const statsUrl = isAdmin()
+        ? '/api/dashboard/stats?withPrevious=1'
+        : `/api/dashboard/stats?withPrevious=1&created_by=${user?.id}`;
+      const lettersUrl = isAdmin()
+        ? '/api/permission-letters?limit=50'
+        : `/api/permission-letters?limit=50&created_by=${user?.id}`;
       const [statsRes, lettersRes] = await Promise.all([
-        fetch('/api/dashboard/stats?withPrevious=1'),
-        fetch('/api/permission-letters?limit=50')
+        fetch(statsUrl),
+        fetch(lettersUrl)
       ]);
       if (statsRes.ok) {
         const s = await statsRes.json();
@@ -121,7 +129,12 @@ export default function HomePage() {
       } else setStats(null);
       if (lettersRes.ok) {
         const l = await lettersRes.json();
-        setRecentLetters(Array.isArray(l.letters) ? l.letters : []);
+        let letters = Array.isArray(l.letters) ? l.letters : [];
+        // fallback filter client-side jika API belum dukung query created_by
+        if (!isAdmin() && user?.id) {
+          letters = letters.filter((item: PermissionLetter) => item.created_by === user.id);
+        }
+        setRecentLetters(letters);
       } else setRecentLetters([]);
     } catch {
       setStats(null);
@@ -130,7 +143,7 @@ export default function HomePage() {
       setLoadingData(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [user, user?.id]); // tambahkan user dependency
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/login');
@@ -212,9 +225,13 @@ export default function HomePage() {
   }, [recentLetters]);
 
   const filteredRecent = useMemo(
-    () => statusFilter === 'all' ? recentLetters : recentLetters.filter(l => l.status === statusFilter),
+    () =>
+      statusFilter === 'all'
+        ? recentLetters
+        : recentLetters.filter(l => l.status === statusFilter),
     [recentLetters, statusFilter]
   );
+  const recentFour = filteredRecent.slice(0, 4);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -283,7 +300,7 @@ export default function HomePage() {
             <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Surat Terbaru</h3>
-                <p className={`text-xs ${TOKENS.textMuted}`}>8 entri terbaru</p>
+                <p className={`text-xs ${TOKENS.textMuted}`}>4 entri terbaru</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {(['all', 'pending', 'approved', 'rejected', 'draft'] as const).map(s => (
@@ -308,10 +325,11 @@ export default function HomePage() {
                   <p className={`text-sm ${TOKENS.textMuted}`}>Tidak ada data</p>
                 </div>
               )}
-              {filteredRecent.slice(0, 8).map(letter => (
+              {recentFour.map(letter => (
                 <div
                   key={letter.id}
-                  className={`${TOKENS.border} ${TOKENS.bgSoft} ${TOKENS.radius} p-3 relative hover:shadow-sm transition`}
+                  className={`relative ${TOKENS.radius} p-4 border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900
+                  hover:shadow-md transition-shadow`}
                 >
                   <div className="flex justify-between gap-4">
                     <div className="flex-1 space-y-2">
@@ -344,7 +362,8 @@ export default function HomePage() {
                           size="sm"
                           isIconOnly
                           variant="flat"
-                          color="primary"
+                          color="default"
+                          className="bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-gray-700 dark:text-gray-200"
                         >
                           <IconEye className="h-4 w-4" />
                         </Button>
@@ -358,6 +377,7 @@ export default function HomePage() {
                             isIconOnly
                             variant="flat"
                             color="default"
+                            className="bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-gray-700 dark:text-gray-200"
                           >
                             <IconEdit className="h-4 w-4" />
                           </Button>
@@ -367,7 +387,7 @@ export default function HomePage() {
                   </div>
                   <Link
                     href={`/letters/permissions/${letter.id}`}
-                    className="absolute inset-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    className="absolute inset-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-800 dark:focus-visible:ring-neutral-200"
                     aria-label="Buka detail"
                   />
                 </div>

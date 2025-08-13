@@ -61,6 +61,28 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Utility: generate next letter number safely
+async function generateNextLetterNumber(prisma, prefix = 'IZIN') {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  // Ambil nomor terakhir bulan ini
+  const last = await prisma.permissionLetter.findFirst({
+    where: {
+      letter_number: {
+        contains: `/${prefix}/${month}/${year}`
+      }
+    },
+    orderBy: { created_at: 'desc' } // atau updated_at tergantung schema
+  });
+  let nextSeq = 1;
+  if (last?.letter_number) {
+    const m = last.letter_number.match(/^(\d{3})\/.+/);
+    if (m) nextSeq = Number(m[1]) + 1;
+  }
+  return { seq: nextSeq, month, year, prefix };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -72,64 +94,68 @@ export async function POST(request: NextRequest) {
       activity,
       letter_type,
       reason,
-      participants,
-      created_by
+      participants = [],
+      created_by,
+      status
     } = body;
 
-    // Generate letter number
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    
-    // Count letters this month to generate sequential number
-    const letterCount = await prisma.permissionLetter.count({
-      where: {
-        created_at: {
-          gte: new Date(year, today.getMonth(), 1),
-          lt: new Date(year, today.getMonth() + 1, 1)
-        }
-      }
-    });
+    if (!date || !time_start || !time_end || !location || !activity || !letter_type) {
+      return new Response(
+        JSON.stringify({ error: 'Field wajib belum lengkap' }),
+        { status: 400 }
+      );
+    }
 
-    const letterNumber = `${String(letterCount + 1).padStart(3, '0')}/IZIN/${month}/${year}`;
+    const MAX_RETRY = 5;
+    let attempt = 0;
+    let created;
 
-    // Create letter with participants
-    const letter = await prisma.permissionLetter.create({
-      data: {
-        letter_number: letterNumber,
-        date: new Date(date),
-        time_start,
-        time_end,
-        location,
-        activity,
-        letter_type,
-        reason,
-        status: 'pending',
-        created_by,
-        participants: {
-          create: participants.map((participant: any) => ({
-            name: participant.name,
-            class: participant.class
-          }))
-        }
-      },
-      include: {
-        creator: {
-          select: {
-            id: true,
-            name: true,
-            email: true
+    while (attempt < MAX_RETRY) {
+      const { seq, month, year, prefix } = await generateNextLetterNumber(prisma);
+      const letter_number = `${String(seq).padStart(3, '0')}/${prefix}/${month}/${year}`;
+      try {
+        created = await prisma.permissionLetter.create({
+          data: {
+            letter_number,
+            date: new Date(date),
+            time_start,
+            time_end,
+            location,
+            activity,
+            letter_type,
+            reason,
+            status: status || 'pending',
+            created_by,
+            participants: {
+              create: participants
+                .filter(p => p.name && p.class)
+                .map(p => ({ name: p.name, class: p.class }))
+            }
+          },
+          include: { participants: true }
+        });
+        break; // sukses
+      } catch (e: any) {
+        if (e.code === 'P2002' && e.meta?.target?.includes('letter_number')) {
+          attempt++;
+          if (attempt >= MAX_RETRY) {
+            return new Response(
+              JSON.stringify({ error: 'Gagal menghasilkan nomor unik, coba lagi.' }),
+              { status: 500 }
+            );
           }
-        },
-        participants: true
+          // lanjut retry
+        } else {
+          throw e;
+        }
       }
-    });
+    }
 
-    return NextResponse.json({ letter });
-  } catch (error) {
-    console.error('Error creating letter:', error);
-    return NextResponse.json(
-      { error: 'Failed to create letter' },
+    return new Response(JSON.stringify(created), { status: 201 });
+  } catch (e: any) {
+    console.error('Error creating letter:', e);
+    return new Response(
+      JSON.stringify({ error: 'Internal server error' }),
       { status: 500 }
     );
   }

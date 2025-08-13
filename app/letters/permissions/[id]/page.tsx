@@ -13,7 +13,8 @@ import {
   IconCalendar,
   IconClock,
   IconMapPin,
-  IconUsers
+  IconUsers,
+  IconCopy // tambah
 } from '@tabler/icons-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -142,6 +143,36 @@ export default function PermissionLetterDetailPage({
     }
   };
 
+  const duplicateToDraft = async () => {
+    if (!letter || !user) return;
+    try {
+      const res = await fetch('/api/permission-letters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          activity: letter.activity,
+          location: letter.location,
+          date: letter.date,
+          time_start: letter.time_start,
+          time_end: letter.time_end,
+          letter_type: letter.letter_type,
+          reason: letter.reason,
+          participants: letter.participants?.map(p => ({ name: p.name, class: p.class })),
+          status: 'draft'
+        })
+      });
+      if (res.ok) {
+        const created = await res.json();
+        router.push(`/letters/permissions/${created.id}/edit`);
+      } else {
+        alert('Gagal menyalin ke draft');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Terjadi kesalahan saat membuat draft');
+    }
+  };
+
   if (loading || !letterId) {
     return (
       <AppLayout>
@@ -191,17 +222,25 @@ export default function PermissionLetterDetailPage({
              </div>
            </div>
            
-          <div className="flex flex-col sm:flex-row w-full md:w-auto gap-2 sm:items-stretch md:justify-end">
-             <Button
+          <div className="flex gap-2 flex-wrap">
+            <Button
               variant="light"
-              size="sm"
-              className="w-full sm:w-auto md:size-medium"
               startContent={<IconPrinter className="h-4 w-4" />}
-             >
-               Cetak
-             </Button>
-             
-             {user?.role === 'admin' && letter.status === 'pending' && (
+            >
+              Cetak
+            </Button>
+            {/* tombol baru: hanya muncul kalau surat sudah selesai (approved/rejected) */}
+            {['approved','rejected'].includes(letter.status) && (
+              <Button
+                variant="flat"
+                color="secondary"
+                startContent={<IconCopy className="h-4 w-4" />}
+                onClick={duplicateToDraft}
+              >
+                Salin Jadi Draft
+              </Button>
+            )}
+            {user?.role === 'admin' && letter.status === 'pending' && (
                <>
                  <Button
                    color="success"

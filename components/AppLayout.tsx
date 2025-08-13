@@ -58,6 +58,13 @@ export function AppLayout({ children }: AppLayoutProps) {
         <IconFileText className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />
       ),
     },
+    {
+      label: "Draft",
+      href: "/letters/permissions/drafts",
+      icon: (
+        <IconArchive className="text-neutral-700 dark:text-neutral-200 h-5 w-5 flex-shrink-0" />
+      ),
+    },
     // Only show Users menu for admin
     ...(isAdmin() ? [{
       label: "Pengguna",

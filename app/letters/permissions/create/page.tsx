@@ -81,24 +81,46 @@ export default function CreatePermissionLetterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    try {
-      const response = await fetch('/api/permission-letters', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formData, created_by: user?.id || 'system' })
-      });
-      if (response.ok) router.push('/letters/permissions');
-      else {
-        const error = await response.json();
-        alert(error.error || 'Gagal menyimpan surat');
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Terjadi kesalahan saat menyimpan surat');
-    } finally {
-      setLoading(false);
+    if (!formData.activity || !formData.location || !formData.date || !formData.time_start || !formData.time_end || !formData.letter_type) {
+      alert("Lengkapi semua field wajib.");
+      return;
     }
+    setLoading(true);
+    let attempt = 0;
+    const MAX_RETRY = 2;
+    while (attempt < MAX_RETRY) {
+      try {
+        const response = await fetch('/api/permission-letters', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...formData, created_by: user?.id || 'system' })
+        });
+        if (response.ok) {
+          router.push('/letters/permissions');
+          return;
+        } else {
+          const error = await response.json().catch(() => ({}));
+          // Jika P2002 muncul (unik), ulangi sekali lagi
+          if (error?.error?.toLowerCase().includes('nomor unik') && attempt < MAX_RETRY - 1) {
+            attempt++;
+            continue;
+          }
+          alert(error.error || 'Gagal menyimpan surat');
+          break;
+        }
+      } catch (err) {
+        console.error(err);
+        if (attempt < MAX_RETRY - 1) {
+          attempt++;
+          continue;
+        }
+        alert('Terjadi kesalahan saat menyimpan surat');
+        break;
+      } finally {
+        attempt++;
+      }
+    }
+    setLoading(false);
   };
 
   return (

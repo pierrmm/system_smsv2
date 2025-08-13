@@ -133,16 +133,43 @@ export default function PermissionLettersPage() {
   );
 
   const fetchLetters = useCallback(async () => {
+    if (!user) return;
     try {
       setLoading(true);
       const params = new URLSearchParams();
       if (search) params.append('search', search);
       if (typeFilter) params.append('type', typeFilter);
       if (statusFilter) params.append('status', statusFilter);
+      if (!isAdmin() && user.id) params.append('created_by', user.id);
       const res = await fetch(`/api/permission-letters?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        setLetters(Array.isArray(data.letters) ? data.letters : []);
+        let list: PermissionLetter[] = Array.isArray(data.letters) ? data.letters : [];
+
+        // fallback filter user
+        if (!isAdmin() && user.id) list = list.filter(l => l.created_by === user.id);
+
+        // TEMUKAN surat approved / rejected -> ubah ke draft
+        const toDraft = list.filter(l => l.status === 'approved' || l.status === 'rejected');
+        if (toDraft.length) {
+          // update paralel (silent)
+            await Promise.all(
+              toDraft.map(l =>
+                fetch(`/api/permission-letters/${l.id}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ status: 'draft' })
+                }).catch(() => null)
+              )
+            );
+          // buang dari tampilan utama (hanya sisakan pending)
+          list = list.filter(l => l.status === 'pending');
+        } else {
+          // jika tidak ada yang dipindah tapi user memilih filter status tertentu, tetap hormati
+          list = list.filter(l => l.status === 'pending');
+        }
+
+        setLetters(list);
       } else {
         setLetters([]);
       }
@@ -152,7 +179,7 @@ export default function PermissionLettersPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, typeFilter, statusFilter]);
+  }, [user, isAdmin, search, typeFilter, statusFilter]);
 
   useEffect(() => {
     fetchLetters();
@@ -305,6 +332,7 @@ export default function PermissionLettersPage() {
 
           {!loading &&
             letters.map((letter) => (
+              // sekarang hanya pending yang muncul
               <Card
                 key={letter.id}
                 className="hover:shadow-md transition-shadow"
