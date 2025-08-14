@@ -12,6 +12,8 @@ import { Chip } from '@heroui/chip';
 import { Divider } from '@heroui/divider';
 import { Skeleton } from '@heroui/skeleton';
 import { Tooltip } from '@heroui/tooltip';
+import { DocumentVerificationModal } from '@/components/DocumentVerificationModal';
+import { useDisclosure } from '@heroui/modal';
 
 import {
   IconFileText,
@@ -25,7 +27,11 @@ import {
   IconRefresh,
   IconChevronRight,
   IconArrowUpRight,
-  IconArrowDownRight
+  IconArrowDownRight,
+  IconShieldCheck,
+  IconArrowUp,
+  IconArrowDown,
+  IconMinus
 } from '@tabler/icons-react';
 
 /* Design Tokens (sederhana) */
@@ -238,6 +244,8 @@ export default function HomePage() {
     await fetchDashboardData();
   };
 
+  const { isOpen: isVerifyOpen, onOpen: onVerifyOpen, onClose: onVerifyClose } = useDisclosure();
+
   if (authLoading || (loadingData && !stats && recentLetters.length === 0)) {
     return (
       <AppLayout>
@@ -260,31 +268,35 @@ export default function HomePage() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Dashboard</h1>
-            <p className={`text-sm ${TOKENS.textMuted}`}>Halo, {user.name}. Ringkasan singkat sistem.</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Dashboard
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">
+              Selamat datang, {user?.name}
+            </p>
           </div>
           <div className="flex gap-2">
             <Button
               variant="flat"
-              color="default"
+              color="secondary"
+              startContent={<IconShieldCheck className="h-4 w-4" />}
+              onPress={onVerifyOpen}
+            >
+              Verifikasi Dokumen
+            </Button>
+            <Button
+              variant="light"
               startContent={<IconRefresh className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />}
               onPress={handleRefresh}
               isDisabled={refreshing}
             >
               Refresh
             </Button>
-            <Button
-              as={Link}
-              href="/letters/permissions/create"
-              color="primary"
-              startContent={<IconPlus className="h-4 w-4" />}
-            >
-              Buat Surat
-            </Button>
           </div>
-        </header>
+        </div>
 
         {/* Stats Row */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -446,6 +458,12 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
+      {/* Document Verification Modal */}
+      <DocumentVerificationModal 
+        isOpen={isVerifyOpen} 
+        onClose={onVerifyClose} 
+      />
     </AppLayout>
   );
 }

@@ -157,8 +157,14 @@ export async function GET(
       });
     }
 
+    // PENTING: Gunakan logika yang sama dengan verifikasi
     const approvedRefDate = letter.approved_at ? toDateSafe(letter.approved_at) : toDateSafe(letter.created_at);
     const sig = hmacSignature(letter.id, approvedRefDate);
+    const validationCode = sig.slice(0, 16).toUpperCase();
+
+    console.log('PDF Generation - Letter ID:', letter.id); // Debug
+    console.log('PDF Generation - Date used:', approvedRefDate.toISOString()); // Debug
+    console.log('PDF Generation - Validation code:', validationCode); // Debug
 
     const lines: string[] = [];
     const push = (t = '') => lines.push(t);
@@ -209,7 +215,7 @@ export async function GET(
     push('-'.repeat(50));
     push(`Status           : DISETUJUI`);
     push(`Tanggal Persetujuan: ${letter.approved_at ? formatDateFull(letter.approved_at) : formatDateFull(letter.created_at)}`);
-    push(`Kode Validasi    : ${sig.slice(0, 16).toUpperCase()}...`);
+    push(`Kode Validasi    : ${validationCode}`); // Tampilkan kode lengkap 16 karakter
     push('');
     push('');
     
@@ -218,6 +224,7 @@ export async function GET(
     push('- Kode validasi dihasilkan otomatis menggunakan HMAC-SHA256');
     push('- Perubahan isi dokumen akan membuat kode tidak valid');
     push('- Untuk verifikasi, cocokkan kode dengan sistem menggunakan nomor surat');
+    push('- Masukkan 16 karakter kode validasi di atas untuk verifikasi');
     push('');
     push(`Dokumen ini digenerate secara otomatis pada ${new Date().toLocaleString('id-ID')}`);
 
