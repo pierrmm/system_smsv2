@@ -112,7 +112,8 @@ export default function HomePage() {
   const [loadingData, setLoadingData] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusKey | 'all'>('all');
-  // pagination dihapus: hanya tampilkan 4 item
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 4;
 
   const isAdmin = () => user?.role === 'admin';
 
@@ -237,7 +238,12 @@ export default function HomePage() {
         : recentLetters.filter(l => l.status === statusFilter),
     [recentLetters, statusFilter]
   );
-  const recentFour = filteredRecent.slice(0, 4);
+
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredRecent.slice(indexOfFirstItem, indexOfLastItem);
+
+  const totalPages = Math.ceil(filteredRecent.length / itemsPerPage);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -331,13 +337,13 @@ export default function HomePage() {
             </CardHeader>
             <Divider />
             <CardBody className="space-y-3">
-              {filteredRecent.length === 0 && (
+              {currentItems.length === 0 && (
                 <div className="py-12 text-center">
                   <IconFileText className="h-10 w-10 text-gray-400 mx-auto mb-3" />
                   <p className={`text-sm ${TOKENS.textMuted}`}>Tidak ada data</p>
                 </div>
               )}
-              {recentFour.map(letter => (
+              {currentItems.map(letter => (
                 <div
                   key={letter.id}
                   className={`relative ${TOKENS.radius} p-4 border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900
@@ -404,15 +410,22 @@ export default function HomePage() {
                   />
                 </div>
               ))}
-              <div className="pt-1">
+              <div className="pt-1 flex justify-between">
                 <Button
-                  as={Link}
-                  href="/letters/permissions"
                   variant="light"
-                  endContent={<IconChevronRight className="h-4 w-4" />}
                   size="sm"
+                  isDisabled={currentPage === 1}
+                  onPress={() => setCurrentPage(currentPage - 1)}
                 >
-                  Lihat Semua
+                  Sebelumnya
+                </Button>
+                <Button
+                  variant="light"
+                  size="sm"
+                  isDisabled={currentPage === totalPages}
+                  onPress={() => setCurrentPage(currentPage + 1)}
+                >
+                  Selanjutnya
                 </Button>
               </div>
             </CardBody>

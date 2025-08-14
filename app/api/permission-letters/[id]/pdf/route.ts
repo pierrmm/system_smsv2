@@ -46,7 +46,7 @@ function wrapText(text: string, maxLength: number): string[] {
 }
 
 function escapePdfText(t: string) {
-return t.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+ return t.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
 }
 
 function buildSimplePdf(lines: string[]): Uint8Array {
@@ -62,31 +62,81 @@ function buildSimplePdf(lines: string[]): Uint8Array {
   // 3 Page
   objects.push('3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 4 0 R >>\nendobj');
 
-  // 4 Content stream with better formatting
+  // 4 Content stream - layout sederhana dan rapi
   const streamCommands: string[] = [];
-  let yPosition = 750;
+  let yPosition = 720;
+  const leftMargin = 60;
+  const pageWidth = 612;
   
   lines.forEach((line, index) => {
+    const trimmedLine = line.trim();
     const isTitle = index === 0;
-    const isHeader = line.includes('Informasi Surat') || line.includes('Daftar Peserta:') || line.includes('Tanda Tangan Elektronik Sistem') || line.includes('INFORMASI VALIDASI:');
-    const isEmpty = line.trim() === '';
+    const isHeader = trimmedLine.includes('Informasi Surat') || 
+                    trimmedLine.includes('Daftar Peserta:') || 
+                    trimmedLine.includes('Tanda Tangan Elektronik Sistem') ||
+                    trimmedLine.includes('INFORMASI VALIDASI:');
+    const isSeparator = trimmedLine.match(/^[-─]+$/);
+    const isEmpty = trimmedLine === '';
+    const isFieldValue = trimmedLine.includes(' : ');
+    const isListItem = trimmedLine.match(/^\s*\d+\./);
+    const isBulletPoint = trimmedLine.startsWith('- ') || trimmedLine.startsWith('• ');
+    const isIndented = trimmedLine.startsWith('  ');
     
     if (isEmpty) {
-      yPosition -= 8; // Smaller spacing for empty lines
+      yPosition -= 12;
       return;
     }
     
     if (isTitle) {
-      // Title - larger, bold, centered
-      streamCommands.push(`BT /F2 16 Tf 306 ${yPosition} Td (${escapePdfText(line)}) Tj ET`);
-      yPosition -= 25;
+      // Title - center dan bold
+      const titleText = escapePdfText(trimmedLine);
+      const titleX = (pageWidth - (trimmedLine.length * 8)) / 2;
+      streamCommands.push(`BT /F2 14 Tf ${titleX} ${yPosition} Td (${titleText}) Tj ET`);
+      yPosition -= 30;
+      
     } else if (isHeader) {
-      // Section headers - bold, slightly larger
-      streamCommands.push(`BT /F2 12 Tf 50 ${yPosition} Td (${escapePdfText(line)}) Tj ET`);
-      yPosition -= 18;
+      // Section headers - bold
+      yPosition -= 5;
+      streamCommands.push(`BT /F2 11 Tf ${leftMargin} ${yPosition} Td (${escapePdfText(trimmedLine)}) Tj ET`);
+      yPosition -= 20;
+      
+    } else if (isSeparator) {
+      // Skip separator lines untuk tampilan yang lebih bersih
+      return;
+      
+    } else if (isFieldValue) {
+      // Field-value pairs dengan format yang konsisten
+      const parts = trimmedLine.split(' : ');
+      const field = parts[0].trim();
+      const value = parts.slice(1).join(' : ').trim();
+      
+      // Field name
+      streamCommands.push(`BT /F2 10 Tf ${leftMargin} ${yPosition} Td (${escapePdfText(field)}) Tj ET`);
+      // Separator
+      streamCommands.push(`BT /F1 10 Tf ${leftMargin + 120} ${yPosition} Td (:) Tj ET`);
+      // Value
+      streamCommands.push(`BT /F1 10 Tf ${leftMargin + 130} ${yPosition} Td (${escapePdfText(value)}) Tj ET`);
+      yPosition -= 16;
+      
+    } else if (isListItem) {
+      // Numbered list
+      streamCommands.push(`BT /F1 9 Tf ${leftMargin + 10} ${yPosition} Td (${escapePdfText(trimmedLine)}) Tj ET`);
+      yPosition -= 14;
+      
+    } else if (isBulletPoint) {
+      // Bullet points
+      const bulletText = trimmedLine.substring(2).trim();
+      streamCommands.push(`BT /F1 9 Tf ${leftMargin + 10} ${yPosition} Td (${escapePdfText('• ' + bulletText)}) Tj ET`);
+      yPosition -= 14;
+      
+    } else if (isIndented) {
+      // Indented text
+      streamCommands.push(`BT /F1 9 Tf ${leftMargin + 20} ${yPosition} Td (${escapePdfText(trimmedLine.trim())}) Tj ET`);
+      yPosition -= 14;
+      
     } else {
       // Regular text
-      streamCommands.push(`BT /F1 10 Tf 50 ${yPosition} Td (${escapePdfText(line)}) Tj ET`);
+      streamCommands.push(`BT /F1 10 Tf ${leftMargin} ${yPosition} Td (${escapePdfText(trimmedLine)}) Tj ET`);
       yPosition -= 14;
     }
   });
@@ -169,64 +219,74 @@ export async function GET(
     const lines: string[] = [];
     const push = (t = '') => lines.push(t);
 
-    // Header with better formatting
+    // Header with professional formatting
     push('SURAT IZIN / KETERANGAN');
     push('');
-    push(`Nomor Surat      : ${letter.letter_number}`);
-    push(`Tanggal Pembuatan: ${formatDateFull(letter.created_at)}`);
+    push('');
+
+    // Document info in two columns style
+    push(`Nomor Surat        : ${letter.letter_number}`);
+    push(`Tanggal Pembuatan  : ${formatDateFull(letter.created_at)}`);
     push('');
     push('');
-    
-    // Information section
+
+    // Information section with better structure
     push('Informasi Surat');
-    push('-'.repeat(50));
-    push(`Jenis Surat      : ${letter.letter_type.toUpperCase()}`);
-    push(`Kegiatan         : ${letter.activity}`);
-    push(`Lokasi           : ${letter.location}`);
-    push(`Tanggal Kegiatan : ${formatDateFull(letter.date)}`);
-    push(`Waktu            : ${letter.time_start} - ${letter.time_end} WIB`);
-    
+    push('_'.repeat(60));
+    push('');
+    push(`Jenis Surat        : ${letter.letter_type.toUpperCase()}`);
+    push(`Kegiatan           : ${letter.activity}`);
+    push(`Lokasi             : ${letter.location}`);
+    push(`Tanggal Kegiatan   : ${formatDateFull(letter.date)}`);
+    push(`Waktu              : ${letter.time_start} - ${letter.time_end} WIB`);
+
     if (letter.reason) {
       push('');
       push('Keterangan:');
-      wrapText(letter.reason, 70).forEach(line => push(`  ${line}`));
+      wrapText(letter.reason, 65).forEach(line => push(`  ${line}`));
     }
-    
+
     push('');
     push('');
-    
-    // Participants section
+
+    // Participants section with better formatting
     push('Daftar Peserta:');
-    push('-'.repeat(50));
+    push('_'.repeat(60));
+    push('');
     if (!letter.participants.length) {
       push('  (Tidak ada peserta terdaftar)');
     } else {
       letter.participants.forEach((p, i) => {
         const no = String(i + 1).padStart(2, '0');
-        push(`  ${no}. ${p.name.padEnd(25)} - ${p.class}`);
+        const name = p.name.padEnd(30);
+        push(`  ${no}. ${name} - ${p.class}`);
       });
     }
-    
+
     push('');
     push('');
-    
-    // Digital signature section
+
+    // Digital signature section with professional layout
     push('Tanda Tangan Elektronik Sistem');
-    push('-'.repeat(50));
-    push(`Status           : DISETUJUI`);
+    push('_'.repeat(60));
+    push('');
+    push(`Status             : DISETUJUI`);
+    push(`Kode Validasi      : ${validationCode}`);    
     push(`Tanggal Persetujuan: ${letter.approved_at ? formatDateFull(letter.approved_at) : formatDateFull(letter.created_at)}`);
-    push(`Kode Validasi    : ${validationCode}`); // Tampilkan kode lengkap 16 karakter
     push('');
     push('');
-    
-    // Footer information
+
+    // Footer information with better structure
     push('INFORMASI VALIDASI:');
-    push('- Kode validasi dihasilkan otomatis menggunakan HMAC-SHA256');
-    push('- Perubahan isi dokumen akan membuat kode tidak valid');
-    push('- Untuk verifikasi, cocokkan kode dengan sistem menggunakan nomor surat');
-    push('- Masukkan 16 karakter kode validasi di atas untuk verifikasi');
+    push('_'.repeat(60));
     push('');
-    push(`Dokumen ini digenerate secara otomatis pada ${new Date().toLocaleString('id-ID')}`);
+    push('> Kode validasi dihasilkan otomatis menggunakan HMAC-SHA256');
+    push('> Perubahan isi dokumen akan membuat kode tidak valid');
+    push('> Untuk verifikasi, cocokkan kode dengan sistem');
+    push('> Masukkan 16 karakter kode validasi untuk verifikasi');
+    push('');
+    push('');
+    push(`Dokumen digenerate otomatis: ${new Date().toLocaleString('id-ID')}`);
 
     const pdfBytes = buildSimplePdf(lines);
 
