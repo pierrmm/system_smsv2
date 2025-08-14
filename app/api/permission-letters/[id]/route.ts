@@ -18,7 +18,7 @@ function parseDate(value: any) {
 // GET - Fetch single permission letter
 export async function GET(_req: NextRequest, { params }: Params) {
   try {
-    const { id } = params;
+    const { id } = await params; // Add await here
     const letter = await prisma.permissionLetter.findUnique({
       where: { id },
       include: includeRelations
@@ -135,7 +135,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 // PUT - Full update (struktur utama + participants + status)
 export async function PUT(req: NextRequest, { params }: Params) {
   try {
-    const { id } = params;
+    const { id } = await params; // Add await here
     const body = await req.json();
     const {
       activity,

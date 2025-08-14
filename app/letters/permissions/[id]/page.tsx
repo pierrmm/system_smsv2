@@ -14,7 +14,8 @@ import {
   IconClock,
   IconMapPin,
   IconUsers,
-  IconCopy // tambah
+  IconCopy,
+  IconDownload // tambah
 } from '@tabler/icons-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -51,6 +52,7 @@ export default function PermissionLetterDetailPage({
   const [letter, setLetter] = useState<PermissionLetter | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [letterId, setLetterId] = useState<string>('');
 
   // Resolve params
@@ -173,6 +175,32 @@ export default function PermissionLetterDetailPage({
     }
   };
 
+  const downloadPdf = async () => {
+    if (!letter || letter.status !== 'approved') return;
+    try {
+      setPdfLoading(true);
+      const res = await fetch(`/api/permission-letters/${letter.id}/pdf`);
+      if (!res.ok) {
+        alert('Gagal membuat PDF');
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Surat-${letter.letter_number.replace(/\//g, '_')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert('Terjadi kesalahan saat mengunduh PDF');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   if (loading || !letterId) {
     return (
       <AppLayout>
@@ -223,21 +251,15 @@ export default function PermissionLetterDetailPage({
            </div>
            
           <div className="flex gap-2 flex-wrap">
-            <Button
-              variant="light"
-              startContent={<IconPrinter className="h-4 w-4" />}
-            >
-              Cetak
-            </Button>
-            {/* tombol baru: hanya muncul kalau surat sudah selesai (approved/rejected) */}
-            {['approved','rejected'].includes(letter.status) && (
+            {letter.status === 'approved' && (
               <Button
                 variant="flat"
-                color="secondary"
-                startContent={<IconCopy className="h-4 w-4" />}
-                onClick={duplicateToDraft}
+                color="default"
+                startContent={<IconDownload className="h-4 w-4" />}
+                onClick={downloadPdf}
+                isLoading={pdfLoading}
               >
-                Salin Jadi Draft
+                Download PDF
               </Button>
             )}
             {user?.role === 'admin' && letter.status === 'pending' && (
