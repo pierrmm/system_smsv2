@@ -453,15 +453,6 @@ export default function PermissionLettersPage() {
                           <IconTrash className="h-4 w-4" />
                         </Button>
                       )}
-                      <Button
-                        size="sm"
-                        variant="light"
-                        color="success"
-                        isIconOnly
-                        // onPress={() => download logic}
-                      >
-                        <IconDownload className="h-4 w-4" />
-                      </Button>
                     </div>
                   </div>
                 </CardBody>

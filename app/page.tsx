@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/AppLayout';
@@ -31,7 +31,9 @@ import {
   IconShieldCheck,
   IconArrowUp,
   IconArrowDown,
-  IconMinus
+  IconMinus,
+  IconBell,
+  IconBellOff
 } from '@tabler/icons-react';
 
 /* Design Tokens (sederhana) */
@@ -115,9 +117,56 @@ export default function HomePage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 4;
 
+  // Tambahkan state dan refs untuk notifikasi
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const previousLetterCount = useRef<number>(0);
+  const isInitialLoad = useRef(true);
+  const pollInterval = useRef<NodeJS.Timeout | null>(null);
+
   const isAdmin = () => user?.role === 'admin';
 
-  const fetchDashboardData = useCallback(async () => {
+  // Utility functions untuk notifikasi
+  const requestNotificationPermission = async (): Promise<boolean> => {
+    if (!('Notification' in window)) return false;
+    if (Notification.permission === 'granted') return true;
+    if (Notification.permission === 'denied') return false;
+    
+    const permission = await Notification.requestPermission();
+    return permission === 'granted';
+  };
+
+  const showNotification = (title: string, options?: NotificationOptions) => {
+    if (Notification.permission === 'granted') {
+      const notification = new Notification(title, {
+        icon: '/favicon.ico',
+        badge: '/favicon.ico',
+        tag: 'surat-baru',
+        renotify: true,
+        requireInteraction: true,
+        ...options
+      });
+
+      setTimeout(() => notification.close(), 10000);
+      return notification;
+    }
+    return null;
+  };
+
+  // Initialize notifications untuk admin
+  useEffect(() => {
+    const initNotifications = async () => {
+      if (isAdmin()) {
+        const granted = await requestNotificationPermission();
+        setNotificationsEnabled(granted);
+      }
+    };
+
+    if (user && !authLoading) {
+      initNotifications();
+    }
+  }, [user, authLoading]);
+
+  const fetchDashboardData = useCallback(async (showNotif = false) => {
     try {
       setLoadingData(true);
       const statsUrl = isAdmin()
@@ -141,6 +190,34 @@ export default function HomePage() {
         if (!isAdmin() && user?.id) {
           letters = letters.filter((item: PermissionLetter) => item.created_by === user.id);
         }
+
+        // Check for new letters (hanya untuk admin)
+        if (isAdmin() && !isInitialLoad.current && showNotif && notificationsEnabled) {
+          const currentCount = letters.filter(l => l.status === 'pending').length;
+          const newLettersCount = currentCount - previousLetterCount.current;
+          
+          if (newLettersCount > 0) {
+            const latestLetter = letters
+              .filter(l => l.status === 'pending')
+              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+            
+            if (latestLetter) {
+              showNotification(
+                `${newLettersCount} Surat Baru Menunggu Persetujuan`,
+                {
+                  body: `${latestLetter.letter_number} - ${latestLetter.activity}`,
+                  data: { letterId: latestLetter.id, url: `/letters/permissions/${latestLetter.id}` }
+                }
+              );
+            }
+          }
+          
+          previousLetterCount.current = currentCount;
+        } else if (isAdmin() && isInitialLoad.current) {
+          previousLetterCount.current = letters.filter(l => l.status === 'pending').length;
+          isInitialLoad.current = false;
+        }
+
         setRecentLetters(letters);
       } else setRecentLetters([]);
     } catch {
@@ -150,7 +227,7 @@ export default function HomePage() {
       setLoadingData(false);
       setRefreshing(false);
     }
-  }, [user, user?.id]); // tambahkan user dependency
+  }, [user, notificationsEnabled]); // tambahkan user dependency
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/login');
@@ -159,6 +236,21 @@ export default function HomePage() {
   useEffect(() => {
     if (user) fetchDashboardData();
   }, [user, fetchDashboardData]);
+
+  // Auto-refresh setiap 30 detik untuk admin
+  useEffect(() => {
+    if (isAdmin() && notificationsEnabled && !authLoading) {
+      pollInterval.current = setInterval(() => {
+        fetchDashboardData(true);
+      }, 30000);
+
+      return () => {
+        if (pollInterval.current) {
+          clearInterval(pollInterval.current);
+        }
+      };
+    }
+  }, [isAdmin, notificationsEnabled, authLoading, fetchDashboardData]);
 
   const derived = useMemo<DashboardStats>(() => {
     if (!stats) {
@@ -252,6 +344,25 @@ export default function HomePage() {
 
   const { isOpen: isVerifyOpen, onOpen: onVerifyOpen, onClose: onVerifyClose } = useDisclosure();
 
+  // Function untuk toggle notifikasi
+  const toggleNotifications = async () => {
+    if (!notificationsEnabled) {
+      const granted = await requestNotificationPermission();
+      setNotificationsEnabled(granted);
+      
+      if (granted) {
+        showNotification('Notifikasi Diaktifkan', {
+          body: 'Anda akan menerima notifikasi untuk surat baru'
+        });
+      }
+    } else {
+      setNotificationsEnabled(false);
+      if (pollInterval.current) {
+        clearInterval(pollInterval.current);
+      }
+    }
+  };
+
   if (authLoading || (loadingData && !stats && recentLetters.length === 0)) {
     return (
       <AppLayout>
@@ -285,6 +396,17 @@ export default function HomePage() {
             </p>
           </div>
           <div className="flex gap-2">
+            {isAdmin() && (
+              <Button
+                variant="flat"
+                color={notificationsEnabled ? "success" : "default"}
+                startContent={notificationsEnabled ? <IconBell className="h-4 w-4" /> : <IconBellOff className="h-4 w-4" />}
+                onPress={toggleNotifications}
+                size="sm"
+              >
+                {notificationsEnabled ? 'Notifikasi ON' : 'Notifikasi OFF'}
+              </Button>
+            )}
             <Button
               variant="flat"
               color="secondary"
