@@ -309,7 +309,7 @@ export default function EditPermissionLetterPage() {
           {/* Daftar Peserta */}
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between w-full">
                 <h3 className="text-lg font-semibold">Daftar Peserta</h3>
                 <Button
                   type="button"

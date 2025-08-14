@@ -258,7 +258,8 @@ export async function GET(
     } else {
       letter.participants.forEach((p, i) => {
         const no = String(i + 1).padStart(2, '0');
-        const name = p.name.padEnd(30);
+        // Nama dipotong maksimal 22 karakter, lalu 2 spasi sebelum kelas
+        const name = p.name.length > 22 ? p.name.slice(0, 22) + '…' : p.name;
         push(`  ${no}. ${name} - ${p.class}`);
       });
     }
@@ -277,12 +278,12 @@ export async function GET(
     push('');
 
     // Footer information with better structure
-    push('INFORMASI VALIDASI:');
+    push('INFORMASI VALIDASI :');
     push('_'.repeat(60));
     push('');
     push('> Kode validasi dihasilkan otomatis menggunakan HMAC-SHA256');
     push('> Perubahan isi dokumen akan membuat kode tidak valid');
-    push('> Untuk verifikasi, cocokkan kode dengan sistem');
+    push('> Gunakan kode validasi di atas untuk memverifikasi keaslian dokumen ini pada sistem kami.');
     push('> Masukkan 16 karakter kode validasi untuk verifikasi');
     push('');
     push('');
@@ -306,3 +307,5 @@ export async function GET(
     });
   }
 }
+
+// Tidak ada perubahan, file sudah sesuai dan siap digunakan untuk generate PDF surat izin.

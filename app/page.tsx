@@ -127,29 +127,97 @@ export default function HomePage() {
 
   // Utility functions untuk notifikasi
   const requestNotificationPermission = async (): Promise<boolean> => {
-    if (!('Notification' in window)) return false;
-    if (Notification.permission === 'granted') return true;
-    if (Notification.permission === 'denied') return false;
+    // Check if browser supports notifications
+    if (!('Notification' in window)) {
+      console.log('Browser tidak mendukung notifikasi');
+      return false;
+    }
+
+    // Check current permission
+    if (Notification.permission === 'granted') {
+      console.log('Notifikasi sudah diizinkan');
+      return true;
+    }
     
-    const permission = await Notification.requestPermission();
-    return permission === 'granted';
+    if (Notification.permission === 'denied') {
+      console.log('Notifikasi ditolak oleh user');
+      alert('Notifikasi telah diblokir. Silakan aktifkan di pengaturan browser.');
+      return false;
+    }
+
+    try {
+      // Request permission - harus dari user interaction
+      const permission = await Notification.requestPermission();
+      console.log('Permission result:', permission);
+      
+      if (permission === 'granted') {
+        console.log('Notifikasi berhasil diaktifkan');
+        return true;
+      } else {
+        console.log('Notifikasi ditolak');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error requesting notification permission:', error);
+      return false;
+    }
   };
 
   const showNotification = (title: string, options?: NotificationOptions) => {
-    if (Notification.permission === 'granted') {
+    console.log('Attempting to show notification:', title);
+    
+    if (!('Notification' in window)) {
+      console.log('Fallback: Browser tidak mendukung notifikasi');
+      // Fallback untuk browser yang tidak mendukung
+      alert(`${title}\n${options?.body || ''}`);
+      return null;
+    }
+
+    if (Notification.permission !== 'granted') {
+      console.log('Fallback: Permission tidak granted');
+      // Fallback jika permission tidak ada
+      alert(`${title}\n${options?.body || ''}`);
+      return null;
+    }
+
+    try {
       const notification = new Notification(title, {
         icon: '/favicon.ico',
         badge: '/favicon.ico',
         tag: 'surat-baru',
         renotify: true,
-        requireInteraction: true,
+        requireInteraction: false, // Ubah ke false untuk mobile
+        silent: false,
         ...options
       });
 
-      setTimeout(() => notification.close(), 10000);
+      // Event listeners
+      notification.onclick = () => {
+        console.log('Notification clicked');
+        window.focus();
+        if (options?.data?.url) {
+          window.location.href = options.data.url;
+        }
+        notification.close();
+      };
+
+      notification.onerror = (error) => {
+        console.error('Notification error:', error);
+      };
+
+      // Auto close after 10 seconds
+      setTimeout(() => {
+        notification.close();
+      }, 10000);
+
+      console.log('Notification created successfully');
       return notification;
+    } catch (error) {
+      console.error('Error creating notification:', error);
+      // Fallback jika gagal membuat notifikasi
+      alert(`${title}\n${options?.body || ''}`);
+      return null;
     }
-    return null;
   };
 
   // Initialize notifications untuk admin
@@ -346,20 +414,30 @@ export default function HomePage() {
 
   // Function untuk toggle notifikasi
   const toggleNotifications = async () => {
+    console.log('Toggle notifications clicked');
+    
     if (!notificationsEnabled) {
+      console.log('Requesting notification permission...');
       const granted = await requestNotificationPermission();
       setNotificationsEnabled(granted);
       
       if (granted) {
-        showNotification('Notifikasi Diaktifkan', {
-          body: 'Anda akan menerima notifikasi untuk surat baru'
+        console.log('Testing notification...');
+        // Test notification
+        showNotification('Notifikasi Diaktifkan ✅', {
+          body: 'Anda akan menerima notifikasi untuk surat baru',
+          icon: '/favicon.ico'
         });
+      } else {
+        alert('Gagal mengaktifkan notifikasi. Pastikan Anda mengizinkan notifikasi di browser.');
       }
     } else {
+      console.log('Disabling notifications...');
       setNotificationsEnabled(false);
       if (pollInterval.current) {
         clearInterval(pollInterval.current);
       }
+      alert('Notifikasi dinonaktifkan');
     }
   };
 
@@ -443,7 +521,7 @@ export default function HomePage() {
                 <p className={`text-xs ${TOKENS.textMuted}`}>4 entri terbaru</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {(['all', 'pending', 'approved', 'rejected', 'draft'] as const).map(s => (
+                {(['all', 'pending', 'approved', 'rejected'] as const).map(s => (
                   <Chip
                     key={s}
                     size="sm"
