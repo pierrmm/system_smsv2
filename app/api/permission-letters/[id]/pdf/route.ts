@@ -181,6 +181,32 @@ function buildSimplePdf(lines: string[]): Uint8Array {
   return new TextEncoder().encode(pdfString);
 }
 
+function stripMetaAndExtract(reason?: string) {
+  const META_PREFIX = '__META__:';
+  if (!reason) return { clean: '', meta: {} as any };
+  const lines = reason.split('\n');
+  const meta: any = {};
+  const kept: string[] = [];
+  lines.forEach(l => {
+    if (l.startsWith(META_PREFIX)) {
+      try {
+        Object.assign(meta, JSON.parse(l.slice(META_PREFIX.length)));
+      } catch { /* ignore */ }
+    } else {
+      kept.push(l);
+    }
+  });
+  return { clean: kept.join('\n').trim(), meta };
+}
+
+function dayDiffInclusive(a: Date, b: Date) {
+  const ms = 1000 * 60 * 60 * 24;
+  const da = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+  const db = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+  const diff = Math.round((db.getTime() - da.getTime()) / ms);
+  return diff >= 0 ? diff + 1 : 1;
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -216,6 +242,35 @@ export async function GET(
     console.log('PDF Generation - Date used:', approvedRefDate.toISOString()); // Debug
     console.log('PDF Generation - Validation code:', validationCode); // Debug
 
+    // Ekstrak meta dari reason global (fallback jika schema belum punya kolom reason peserta / rentang tanggal)
+    const { clean: letterReasonClean, meta } = stripMetaAndExtract(letter.reason || '');
+
+    // Ambil rentang tanggal (prioritas kolom langsung, kemudian meta, terakhir single date)
+    const startRaw: any =
+      (letter as any).date_start ||
+      meta?.date_range?.start ||
+      letter.date;
+    const endRaw: any =
+      (letter as any).date_end ||
+      meta?.date_range?.end ||
+      (letter as any).date_start ||
+      letter.date;
+    const startDateObj = toDateSafe(startRaw);
+    const endDateObj = toDateSafe(endRaw);
+    const hasRange = startDateObj && endDateObj && startDateObj.toDateString() !== endDateObj.toDateString();
+    const durationDays = dayDiffInclusive(startDateObj, endDateObj);
+
+    // Merge reason peserta dari meta bila reason peserta kosong
+    const participantsAugmented = letter.participants.map(p => {
+      const existing = (p as any).reason;
+      if (existing) return p;
+      if (Array.isArray(meta.participants)) {
+        const found = meta.participants.find((m: any) => m.name === p.name);
+        if (found?.reason) return { ...p, reason: found.reason };
+      }
+      return p;
+    });
+
     const lines: string[] = [];
     const push = (t = '') => lines.push(t);
 
@@ -237,14 +292,14 @@ export async function GET(
     push(`Jenis Surat        : ${letter.letter_type.toUpperCase()}`);
     push(`Kegiatan           : ${letter.activity}`);
     push(`Lokasi             : ${letter.location}`);
-    push(`Tanggal Kegiatan   : ${formatDateFull(letter.date)}`);
-    push(`Waktu              : ${letter.time_start} - ${letter.time_end} WIB`);
-
-    if (letter.reason) {
-      push('');
-      push('Keterangan:');
-      wrapText(letter.reason, 65).forEach(line => push(`  ${line}`));
+    if (hasRange) {
+      push(
+        `Tanggal Kegiatan   : ${formatDateFull(startDateObj)} s/d ${formatDateFull(endDateObj)} (${durationDays} hari)`
+      );
+    } else {
+      push(`Tanggal Kegiatan   : ${formatDateFull(startDateObj)}`);
     }
+    push(`Waktu              : ${letter.time_start} - ${letter.time_end} WIB`);
 
     push('');
     push('');
@@ -253,14 +308,27 @@ export async function GET(
     push('Daftar Peserta:');
     push('_'.repeat(60));
     push('');
-    if (!letter.participants.length) {
+    if (!participantsAugmented.length) {
       push('  (Tidak ada peserta terdaftar)');
     } else {
-      letter.participants.forEach((p, i) => {
+      participantsAugmented.forEach((p, i) => {
         const no = String(i + 1).padStart(2, '0');
-        // Nama dipotong maksimal 22 karakter, lalu 2 spasi sebelum kelas
-        const name = p.name.length > 22 ? p.name.slice(0, 22) + '…' : p.name;
-        push(`  ${no}. ${name} - ${p.class}`);
+        const name = p.name.length > 28 ? p.name.slice(0, 28) + '…' : p.name;
+        const base = `  ${no}. ${name} (${p.class})`;
+        const reason = (p as any).reason ? String((p as any).reason).trim() : '';
+        if (!reason) {
+          push(base);
+        } else {
+          // Sisakan ruang indent untuk baris lanjutan
+            const prefix = `${base} - Ket: `;
+          const maxLineLen = 90;
+          const wrapped = wrapText(reason, Math.max(10, maxLineLen - prefix.length));
+          // Baris pertama
+          push(prefix + wrapped[0]);
+          // Baris lanjutan
+          const indent = ' '.repeat(prefix.length);
+          wrapped.slice(1).forEach(w => push(indent + w));
+        }
       });
     }
 

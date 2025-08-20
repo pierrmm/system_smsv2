@@ -22,16 +22,17 @@ import { parseDate, parseTime } from '@internationalized/date';
 interface Participant {
   name: string;
   class: string;
+  reason: string; // Tambahkan field keterangan per peserta
 }
 
 interface FormData {
-  date: string;        // yyyy-mm-dd
-  time_start: string;  // HH:MM
-  time_end: string;    // HH:MM
+  date_start: string;
+  date_end: string;
+  time_start: string;
+  time_end: string;
   location: string;
   activity: string;
   letter_type: string;
-  reason: string;
   participants: Participant[];
 }
 
@@ -40,14 +41,14 @@ export default function CreatePermissionLetterPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<FormData>({
-    date: '',
+    date_start: '',
+    date_end: '',
     time_start: '',
     time_end: '',
     location: '',
     activity: '',
     letter_type: '',
-    reason: '',
-    participants: [{ name: '', class: '' }]
+    participants: [{ name: '', class: '', reason: '' }]
   });
 
   const letterTypes = [
@@ -57,10 +58,12 @@ export default function CreatePermissionLetterPage() {
     { key: 'lomba', label: 'Surat Izin Lomba' }
   ];
 
+  const todayIso = new Date().toISOString().slice(0,10);
+
   const handleBack = () => router.back();
 
   const addParticipant = () =>
-    setFormData(f => ({ ...f, participants: [...f.participants, { name: '', class: '' }] }));
+    setFormData(f => ({ ...f, participants: [...f.participants, { name: '', class: '', reason: '' }] }));
 
   const removeParticipant = (index: number) => {
     setFormData(f => ({
@@ -81,27 +84,68 @@ export default function CreatePermissionLetterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.activity || !formData.location || !formData.date || !formData.time_start || !formData.time_end || !formData.letter_type) {
-      alert("Lengkapi semua field wajib.");
+
+    // Validasi detail
+    const missing: string[] = [];
+    if (!formData.activity) missing.push('Kegiatan');
+    if (!formData.location) missing.push('Lokasi');
+    if (!formData.letter_type) missing.push('Jenis Surat');
+    if (!formData.date_start) missing.push('Tanggal Mulai');
+    if (!formData.date_end) missing.push('Tanggal Selesai');
+    if (!formData.time_start) missing.push('Waktu Mulai');
+    if (!formData.time_end) missing.push('Waktu Selesai');
+
+    // Validasi peserta
+    const participantIssues = formData.participants
+      .map((p, i) => (!p.name || !p.class ? `Peserta #${i + 1}` : null))
+      .filter(Boolean);
+
+    // Validasi konsistensi tanggal
+    if (formData.date_start && formData.date_end && formData.date_start > formData.date_end) {
+      alert('Tanggal Mulai tidak boleh lebih besar dari Tanggal Selesai.');
       return;
     }
+
+    if (missing.length) {
+      alert(`Lengkapi field wajib: ${missing.join(', ')}`);
+      return;
+    }
+    if (participantIssues.length) {
+      alert(`Lengkapi data peserta: ${participantIssues.join(', ')}`);
+      return;
+    }
+
+    // Payload kompatibel dengan backend lama (field "date" tunggal)
+    const payload = {
+      ...formData,
+      date: formData.date_start,       // kompatibilitas
+      date_end: formData.date_end,     // jika backend nanti mendukung rentang
+      participants: formData.participants.map(p => ({
+        name: p.name,
+        class: p.class,
+        reason: p.reason
+      })),
+      created_by: user?.id || 'system'
+    };
+
     setLoading(true);
     let attempt = 0;
     const MAX_RETRY = 2;
+
     while (attempt < MAX_RETRY) {
       try {
+        console.log('Submitting permission letter payload:', payload);
         const response = await fetch('/api/permission-letters', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...formData, created_by: user?.id || 'system' })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
         });
         if (response.ok) {
           router.push('/letters/permissions');
           return;
         } else {
           const error = await response.json().catch(() => ({}));
-          // Jika P2002 muncul (unik), ulangi sekali lagi
-          if (error?.error?.toLowerCase().includes('nomor unik') && attempt < MAX_RETRY - 1) {
+          if (error?.error?.toLowerCase?.().includes('nomor unik') && attempt < MAX_RETRY - 1) {
             attempt++;
             continue;
           }
@@ -154,17 +198,18 @@ export default function CreatePermissionLetterPage() {
               </CardHeader>
               <CardBody className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Date */}
+                  {/* Date Range */}
                   <div className="flex flex-col gap-2">
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Tanggal Kegiatan
+                      Tanggal Mulai
                     </span>
                     <DatePicker
-                      aria-label="Tanggal Kegiatan"
+                      aria-label="Tanggal Mulai"
                       variant="flat"
-                      value={formData.date ? parseDate(formData.date) : null}
+                      value={formData.date_start ? parseDate(formData.date_start) : null}
+                      minValue={parseDate(todayIso)}
                       onChange={(val) =>
-                        setFormData(f => ({ ...f, date: val ? val.toString() : '' }))
+                        setFormData(f => ({ ...f, date_start: val ? val.toString() : '' }))
                       }
                       isRequired
                       placeholderValue={parseDate(
@@ -174,25 +219,45 @@ export default function CreatePermissionLetterPage() {
                       granularity="day"
                     />
                   </div>
-
-                  {/* Letter Type */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Jenis Surat
-                    </label>
-                    <Select
-                      placeholder="Pilih jenis surat"
-                      selectedKeys={formData.letter_type ? [formData.letter_type] : []}
-                      onSelectionChange={(keys) => {
-                        const selectedKey = Array.from(keys)[0] as string;
-                        setFormData(f => ({ ...f, letter_type: selectedKey }));
-                      }}
-                    >
-                      {letterTypes.map(type => (
-                        <SelectItem key={type.key}>{type.label}</SelectItem>
-                      ))}
-                    </Select>
+                  <div className="flex flex-col gap-2">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Tanggal Selesai
+                    </span>
+                    <DatePicker
+                      aria-label="Tanggal Selesai"
+                      variant="flat"
+                      value={formData.date_end ? parseDate(formData.date_end) : null}
+                      minValue={parseDate(todayIso)}
+                      onChange={(val) =>
+                        setFormData(f => ({ ...f, date_end: val ? val.toString() : '' }))
+                      }
+                      isRequired
+                      placeholderValue={parseDate(
+                        new Date().toISOString().slice(0, 10)
+                      )}
+                      className="w-full"
+                      granularity="day"
+                    />
                   </div>
+                </div>
+
+                {/* Jenis Surat (dikembalikan) */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Jenis Surat
+                  </label>
+                  <Select
+                    placeholder="Pilih jenis surat"
+                    selectedKeys={formData.letter_type ? [formData.letter_type] : []}
+                    onSelectionChange={(keys) => {
+                      const selectedKey = Array.from(keys)[0] as string;
+                      setFormData(f => ({ ...f, letter_type: selectedKey }));
+                    }}
+                  >
+                    {letterTypes.map(type => (
+                      <SelectItem key={type.key}>{type.label}</SelectItem>
+                    ))}
+                  </Select>
                 </div>
 
                 {/* Time Inputs */}
@@ -235,37 +300,7 @@ export default function CreatePermissionLetterPage() {
                   required
                 />
 
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Alasan/Keterangan
-                  </label>
-                  <textarea
-                    placeholder="Masukkan alasan atau keterangan tambahan"
-                    value={formData.reason}
-                    onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
-                    rows={3}
-                    autoComplete="off"
-                    className="
-                      w-full
-                      rounded-lg
-                      border border-gray-300 dark:border-gray-600
-                      bg-white dark:bg-gray-800
-                      text-gray-900 dark:text-white
-                      placeholder-gray-500 dark:placeholder-gray-400
-                      px-3 py-2
-                      focus:outline-none
-                      focus:ring-2 focus:ring-blue-500/60
-                      focus:border-blue-500
-                      focus:bg-white dark:focus:bg-gray-800
-                      [::-webkit-autofill]:shadow-[inset_0_0_0_1000px_theme(colors.white)]
-                      dark:[::-webkit-autofill]:shadow-[inset_0_0_0_1000px_theme(colors.gray.800)]
-                      [::-webkit-autofill]:text-fill-black
-                      dark:[::-webkit-autofill]:text-fill-white
-                      transition
-                      resize-none
-                    "
-                  />
-                </div>
+                {/* Hapus textarea alasan/keterangan global */}
               </CardBody>
             </Card>
 
@@ -304,6 +339,14 @@ export default function CreatePermissionLetterPage() {
                     onChange={(e) => updateParticipant(index, 'class', e.target.value)}
                     className="flex-1"
                     required
+                  />
+                  {/* Field keterangan per peserta */}
+                  <Input
+                    label="Keterangan"
+                    placeholder="Keterangan/alasan peserta"
+                    value={participant.reason}
+                    onChange={(e) => updateParticipant(index, 'reason', e.target.value)}
+                    className="flex-1"
                   />
                   {formData.participants.length > 1 && (
                     <div className="flex items-end">

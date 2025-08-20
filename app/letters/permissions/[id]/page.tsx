@@ -15,7 +15,7 @@ import {
   IconMapPin,
   IconUsers,
   IconCopy,
-  IconDownload // tambah
+  IconDownload
 } from '@tabler/icons-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -25,20 +25,24 @@ import Link from 'next/link';
 interface PermissionLetter {
   id: string;
   letter_number: string;
-  date: string;
+  date: string;               // fallback legacy
+  date_start?: string;        // baru
+  date_end?: string;          // baru
   time_start: string;
   time_end: string;
   location: string;
   activity: string;
   letter_type: string;
-  reason: string;
   status: string;
   created_at: string;
   approved_at: string;
+  // reason global dihapus dari form; tetap opsional bila masih ada di backend
+  reason?: string | null;
   participants: Array<{
     id: string;
     name: string;
     class: string;
+    reason?: string | null;   // keterangan per peserta
   }>;
 }
 
@@ -55,6 +59,8 @@ export default function PermissionLetterDetailPage({
   const [pdfLoading, setPdfLoading] = useState(false);
   const [letterId, setLetterId] = useState<string>('');
 
+  const META_PREFIX = '__META__:';
+
   // Resolve params
   useEffect(() => {
     const resolveParams = async () => {
@@ -66,12 +72,40 @@ export default function PermissionLetterDetailPage({
 
   const fetchLetter = async () => {
     if (!letterId) return;
-    
     try {
       const response = await fetch(`/api/permission-letters/${letterId}`);
       if (response.ok) {
         const data = await response.json();
-        setLetter(data);
+
+        const raw = data;
+        let inferredDateEnd: string | undefined = raw.date_end;
+        let participants = raw.participants || [];
+        // Parse meta dari reason global jika ada
+        if (raw.reason && typeof raw.reason === 'string' && raw.reason.includes(META_PREFIX)) {
+          const metaLine = raw.reason.split('\n').find((l: string) => l.startsWith(META_PREFIX));
+          if (metaLine) {
+            try {
+              const metaJson = metaLine.slice(META_PREFIX.length);
+              const meta = JSON.parse(metaJson);
+              if (!inferredDateEnd && meta.date_range?.end) inferredDateEnd = meta.date_range.end;
+              if (meta.participants && Array.isArray(meta.participants)) {
+                participants = participants.map((p: any) => {
+                  const found = meta.participants.find((m: any) => m.name === p.name);
+                  return { ...p, reason: p.reason ?? found?.reason ?? '' };
+                });
+              }
+            } catch {
+              // ignore parse error
+            }
+          }
+        }
+        const normalized = {
+          ...raw,
+          date_end: inferredDateEnd,
+          participants
+        };
+        console.debug('PermissionLetter detail (normalized):', normalized);
+        setLetter(normalized);
       } else {
         router.push('/letters/permissions');
       }
@@ -147,20 +181,29 @@ export default function PermissionLetterDetailPage({
 
   const duplicateToDraft = async () => {
     if (!letter || !user) return;
+    const startDate = letter.date_start || letter.date;
+    const endDate = letter.date_end || letter.date_end || letter.date_start || letter.date;
     try {
       const res = await fetch('/api/permission-letters', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           activity: letter.activity,
-          location: letter.location,
-          date: letter.date,
-          time_start: letter.time_start,
-          time_end: letter.time_end,
-          letter_type: letter.letter_type,
-          reason: letter.reason,
-          participants: letter.participants?.map(p => ({ name: p.name, class: p.class })),
-          status: 'draft'
+            location: letter.location,
+            // kompatibilitas backend lama
+            date: startDate,
+            date_start: startDate,
+            date_end: endDate,
+            time_start: letter.time_start,
+            time_end: letter.time_end,
+            letter_type: letter.letter_type,
+            // reason global sudah tidak digunakan (tidak dikirim)
+            participants: letter.participants?.map(p => ({
+              name: p.name,
+              class: p.class,
+              reason: p.reason || ''
+            })),
+            status: 'draft'
         })
       });
       if (res.ok) {
@@ -198,6 +241,19 @@ export default function PermissionLetterDetailPage({
       alert('Terjadi kesalahan saat mengunduh PDF');
     } finally {
       setPdfLoading(false);
+    }
+  };
+
+  // Helper durasi hari (inklusif)
+  const getDurationDays = (start: string, end: string) => {
+    try {
+      const s = new Date(start);
+      const e = new Date(end);
+      if (isNaN(s.getTime()) || isNaN(e.getTime())) return 1;
+      const diff = Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24));
+      return diff >= 0 ? diff + 1 : 1;
+    } catch {
+      return 1;
     }
   };
 
@@ -354,12 +410,18 @@ export default function PermissionLetterDetailPage({
                     Tanggal
                   </label>
                   <p className="text-gray-900 dark:text-white">
-                    {new Date(letter.date).toLocaleDateString('id-ID', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
+                    {(() => {
+                      const start = letter.date_start || letter.date;
+                      const end = letter.date_end || letter.date_start || letter.date;
+                      const fmt = (d: string) => new Date(d).toLocaleDateString('id-ID', {
+                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+                      });
+                      const rangeText = start && end && start !== end
+                        ? `${fmt(start)} s/d ${fmt(end)}`
+                        : fmt(start);
+                      const durasi = getDurationDays(start, end);
+                      return `${rangeText} (${durasi} hari)`;
+                    })()}
                   </p>
                 </div>
               </div>
@@ -388,18 +450,9 @@ export default function PermissionLetterDetailPage({
                 </div>
               </div>
 
-              {letter.reason && (
-                <>
-                  <Divider />
-                  <div>
-                    <label className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                      Alasan/Keterangan
-                    </label>
-                    <p className="text-gray-900 dark:text-white">
-                      {letter.reason}
-                    </p>
-                  </div>
-                </>
+              {false && letter.reason && (
+                // Bagian alasan global dinonaktifkan karena sudah dipindah per peserta.
+                <></>
               )}
             </CardBody>
           </Card>
@@ -426,6 +479,9 @@ export default function PermissionLetterDetailPage({
                     </p>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       Kelas {participant.class}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Keterangan: {participant.reason && participant.reason.trim() !== '' ? participant.reason : '-'}
                     </p>
                   </div>
                   <span className="text-sm font-medium text-gray-500 dark:text-gray-400">

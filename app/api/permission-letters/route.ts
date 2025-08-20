@@ -88,6 +88,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       date,
+      date_start,
+      date_end,
       time_start,
       time_end,
       location,
@@ -99,64 +101,123 @@ export async function POST(request: NextRequest) {
       status
     } = body;
 
-    if (!date || !time_start || !time_end || !location || !activity || !letter_type) {
-      return new Response(
-        JSON.stringify({ error: 'Field wajib belum lengkap' }),
-        { status: 400 }
-      );
+    const effectiveDate = date_start || date;
+
+    if (!effectiveDate || !time_start || !time_end || !location || !activity || !letter_type) {
+      return new Response(JSON.stringify({ error: 'Field wajib belum lengkap' }), { status: 400 });
     }
 
-    const MAX_RETRY = 5;
+    const MAX_RETRY_UNIQUE = 5;
+    const MAX_ADAPT_ATTEMPTS = 5; // batas adaptasi schema
     let attempt = 0;
-    let created;
+    let adaptAttempts = 0;
+    let created: any = null;
 
-    while (attempt < MAX_RETRY) {
+    let supportsRangeDates = true;
+    let supportsParticipantReason = true;
+
+    const META_PREFIX = '__META__:';
+
+    while (attempt < MAX_RETRY_UNIQUE && adaptAttempts < MAX_ADAPT_ATTEMPTS) {
       const { seq, month, year, prefix } = await generateNextLetterNumber(prisma);
       const letter_number = `${String(seq).padStart(3, '0')}/${prefix}/${month}/${year}`;
+
+      // Kumpulkan meta fallback
+      const meta: any = {};
+
+      // Build participants create data (sementara, bisa disesuaikan jika kolom reason tidak ada)
+      const participantCreate = participants
+        .filter((p: any) => p.name && p.class)
+        .map((p: any) => {
+          const base: any = { name: p.name, class: p.class };
+          const r = (p.reason ?? '').toString().trim();
+          if (supportsParticipantReason) {
+            if (r) base.reason = r;
+          } else if (r) {
+            if (!meta.participants) meta.participants = [];
+            meta.participants.push({ name: p.name, reason: r });
+          }
+          return base;
+        });
+
+      // Data surat
+      let baseReason = reason ?? '';
+      const data: any = {
+        letter_number,
+        date: new Date(effectiveDate),
+        time_start,
+        time_end,
+        location,
+        activity,
+        letter_type,
+        status: status || 'pending',
+        created_by,
+        participants: { create: participantCreate }
+      };
+
+      if (supportsRangeDates) {
+        if (date_start) data.date_start = new Date(date_start);
+        if (date_end && date_end !== date_start) data.date_end = new Date(date_end);
+      } else if (date_start && date_end && date_end !== date_start) {
+        meta.date_range = { start: date_start, end: date_end };
+      }
+
+      // Sisipkan meta bila diperlukan (saat schema tidak mendukung kolom terkait)
+      if (Object.keys(meta).length) {
+        const metaLine = META_PREFIX + JSON.stringify(meta);
+        baseReason = baseReason ? `${baseReason}\n${metaLine}` : metaLine;
+      }
+      if (baseReason) data.reason = baseReason;
+
       try {
         created = await prisma.permissionLetter.create({
-          data: {
-            letter_number,
-            date: new Date(date),
-            time_start,
-            time_end,
-            location,
-            activity,
-            letter_type,
-            reason,
-            status: status || 'pending',
-            created_by,
-            participants: {
-              create: participants
-                .filter(p => p.name && p.class)
-                .map(p => ({ name: p.name, class: p.class }))
-            }
-          },
+          data,
           include: { participants: true }
         });
-        break; // sukses
+        break;
       } catch (e: any) {
+        const msg = (e.message || '').toLowerCase();
+
         if (e.code === 'P2002' && e.meta?.target?.includes('letter_number')) {
           attempt++;
-          if (attempt >= MAX_RETRY) {
-            return new Response(
-              JSON.stringify({ error: 'Gagal menghasilkan nomor unik, coba lagi.' }),
-              { status: 500 }
-            );
-          }
-          // lanjut retry
-        } else {
-          throw e;
+          continue;
         }
+
+        if (supportsRangeDates &&
+            (msg.includes('unknown argument `date_start`') || msg.includes('unknown argument `date_end`'))) {
+          console.warn('[PermissionLetter] Kolom date_start/date_end belum ada. Fallback ke meta.');
+          supportsRangeDates = false;
+          adaptAttempts++;
+          continue;
+        }
+
+        if (supportsParticipantReason && msg.includes('unknown argument `reason`')) {
+          console.warn('[PermissionLetter] Kolom reason peserta belum ada. Fallback meta participants.');
+          supportsParticipantReason = false;
+          adaptAttempts++;
+          continue;
+        }
+
+        if (e.code === 'P2003') {
+          return new Response(JSON.stringify({ error: 'Relasi tidak valid (P2003).' }), { status: 400 });
+        }
+
+        console.error('Error creating letter (fatal):', e);
+        return new Response(JSON.stringify({ error: 'Internal server error' }), { status: 500 });
       }
+    }
+
+    if (!created) {
+      const reason =
+        adaptAttempts >= MAX_ADAPT_ATTEMPTS
+          ? 'Adaptasi schema gagal. Pastikan kolom date_start, date_end, reason peserta sudah dimigrate.'
+          : 'Pembuatan surat gagal.';
+      return new Response(JSON.stringify({ error: reason }), { status: 500 });
     }
 
     return new Response(JSON.stringify(created), { status: 201 });
   } catch (e: any) {
-    console.error('Error creating letter:', e);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
-      { status: 500 }
-    );
+    console.error('Error creating letter (outer):', e);
+    return new Response(JSON.stringify({ error: 'Internal server error' }), { status: 500 });
   }
 }
