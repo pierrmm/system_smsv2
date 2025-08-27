@@ -229,10 +229,10 @@ export default function PermissionLettersPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Surat Izin
+              Pengajuan Surat
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mt-2">
-              Kelola surat izin siswa dan kegiatan sekolah
+              Kelola Pengajuan Surat siswa dan kegiatan sekolah
             </p>
           </div>
             <Button
@@ -241,7 +241,7 @@ export default function PermissionLettersPage() {
               color="primary"
               startContent={<IconPlus className="h-5 w-5" />}
             >
-              Buat Surat Izin
+              Buat Pengajuan Surat
             </Button>
         </div>
 

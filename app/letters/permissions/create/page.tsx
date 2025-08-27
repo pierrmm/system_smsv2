@@ -182,10 +182,10 @@ export default function CreatePermissionLetterPage() {
           </Button>
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Buat Surat Izin
+              Buat Pengajuan Surat
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mt-2">
-              Buat surat izin baru untuk siswa atau kegiatan sekolah
+              Buat Pengajuan Surat baru untuk siswa atau kegiatan sekolah
             </p>
           </div>
         </div>

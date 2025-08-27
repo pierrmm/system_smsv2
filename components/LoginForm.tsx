@@ -57,10 +57,10 @@ export function LoginForm() {
         <div className="space-y-8 text-center lg:text-left">
           <div className="space-y-4">
             <h1 className="text-4xl lg:text-5xl font-bold text-gray-900 dark:text-white">
-              Sistem Surat Menyurat Digital
+              Sistem Pengajuan Surat Digital
             </h1>
             <p className="text-xl text-gray-600 dark:text-gray-400">
-              Kelola surat izin dan administrasi sekolah dengan mudah dan efisien
+              Kelola Pengajuan Surat dan administrasi sekolah dengan mudah dan efisien
             </p>
           </div>
           
@@ -70,10 +70,10 @@ export function LoginForm() {
                 <span className="text-white dark:text-black font-bold text-lg">📝</span>
               </div>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Buat Surat Izin
+                Buat Pengajuan Surat
               </h3>
               <p className="text-gray-600 dark:text-gray-400 text-sm">
-                Buat surat izin siswa dengan template yang tersedia. Proses cepat dan mudah untuk berbagai keperluan.
+                Buat Pengajuan surat siswa dengan template yang tersedia. Proses cepat dan mudah untuk berbagai keperluan.
               </p>
             </div>
             
@@ -97,7 +97,7 @@ export function LoginForm() {
                 Proses Cepat
               </h3>
               <p className="text-gray-600 dark:text-gray-400 text-sm">
-                Sistem yang dirancang untuk mempercepat proses pembuatan dan persetujuan surat izin.
+                Sistem yang dirancang untuk mempercepat proses pembuatan dan persetujuan Pengajuan Surat .
               </p>
             </div>
             
