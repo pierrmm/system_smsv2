@@ -88,27 +88,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(userObj);
         localStorage.setItem('admin_user', JSON.stringify(userObj));
         console.log('User logged in successfully:', userObj);
-        
-        router.push('/dashboard'); // Redirect to dashboard after successful login
+        // Biarkan komponen pemanggil yang mengatur redirect (mendukung ?redirect=...)
 
         return { error: undefined };
       } else {
-        return { 
-          error: { 
-            message: data.message || 'Login gagal',
-            type: 'credentials'
-          } 
-        };
+        const apiError = (data && data.error) || {};
+        const message = apiError.message || 'Login gagal';
+        const type = apiError.type || 'credentials';
+        return { error: { message, type } };
       }
 
     } catch (error) {
       console.error('Login error:', error);
-      return { 
-        error: { 
-          message: 'Terjadi kesalahan sistem. Silakan coba lagi.',
-          type: 'system'
-        } 
-      };
+      return { error: { message: 'Terjadi kesalahan sistem. Silakan coba lagi.', type: 'system' } };
     } finally {
       setLoading(false);
     }

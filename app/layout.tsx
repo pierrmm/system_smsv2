@@ -1,3 +1,4 @@
+
 import "@/styles/globals.css";
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
@@ -12,13 +13,12 @@ import { fontSans } from "@/config/fonts";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: {
-    default: "Sistem Surat Menyurat Sekolah",
-    template: `%s - Sistem Surat Menyurat Sekolah`,
-  },
-  description: "Sistem Informasi Surat Menyurat untuk Sekolah",
+  title: "Sistem SMS Pesat",
+  description: "Sistem Manajemen Surat Pesat",
   icons: {
-    icon: "/favicon.ico",
+    icon: "/images/pesat1.png",
+    shortcut: "/images/pesat1.png",
+    apple: "/images/pesat1.png",
   },
 };
 
@@ -35,8 +35,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html suppressHydrationWarning lang="id">
-      <head />
+    <html lang="id">
+      <head>
+        <link rel="icon" href="/images/pesat1.png" />
+        <link rel="shortcut icon" href="/images/pesat1.png" />
+        <link rel="apple-touch-icon" href="/images/pesat1.png" />
+      </head>
       <body
         className={clsx(
           inter.className,
