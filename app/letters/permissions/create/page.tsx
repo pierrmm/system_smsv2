@@ -15,8 +15,10 @@ import {
 } from '@tabler/icons-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { AppLayout } from '@/components/AppLayout';
+import Loading from '@/components/Loading';
 import { parseDate, parseTime } from '@internationalized/date';
 
 interface Participant {
@@ -37,7 +39,7 @@ interface FormData {
 }
 
 export default function CreatePermissionLetterPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<FormData>({
@@ -61,6 +63,21 @@ export default function CreatePermissionLetterPage() {
   const todayIso = new Date().toISOString().slice(0,10);
 
   const handleBack = () => router.back();
+
+  // Require login: redirect to login with return path
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push(`/login?redirect=${encodeURIComponent('/letters/permissions/create')}`);
+    }
+  }, [authLoading, user, router]);
+
+  if (authLoading || !user) {
+    return (
+      <AppLayout>
+        <Loading message="Memuat..." size="lg" className="min-h-96" />
+      </AppLayout>
+    );
+  }
 
   const addParticipant = () =>
     setFormData(f => ({ ...f, participants: [...f.participants, { name: '', class: '', reason: '' }] }));
@@ -325,16 +342,16 @@ export default function CreatePermissionLetterPage() {
               {formData.participants.map((participant, index) => (
                 <div key={index} className="flex flex-col md:flex-row gap-4">
                   <Input
-                    label="Nama Peserta"
-                    placeholder="Masukkan nama peserta"
+                    label="Nama"
+                    placeholder="Masukkan nama"
                     value={participant.name}
                     onChange={(e) => updateParticipant(index, 'name', e.target.value)}
                     className="flex-1"
                     required
                   />
                   <Input
-                    label="Kelas"
-                    placeholder="Contoh: XII RPL 1"
+                    label="Jabatan"
+                    placeholder="Contoh: Kelas/Guru"
                     value={participant.class}
                     onChange={(e) => updateParticipant(index, 'class', e.target.value)}
                     className="flex-1"
@@ -343,7 +360,7 @@ export default function CreatePermissionLetterPage() {
                   {/* Field keterangan per peserta */}
                   <Input
                     label="Keterangan"
-                    placeholder="Keterangan/alasan peserta"
+                    placeholder="Keterangan/alasan"
                     value={participant.reason}
                     onChange={(e) => updateParticipant(index, 'reason', e.target.value)}
                     className="flex-1"

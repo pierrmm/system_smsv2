@@ -22,7 +22,7 @@ import {
   useDisclosure
 } from '@heroui/modal';
 import { Select, SelectItem } from '@heroui/select';
-import { Spinner } from '@heroui/spinner';
+import Loading from '@/components/Loading';
 import {
   IconUsers,
   IconPlus,
@@ -229,7 +229,7 @@ export default function UsersPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Spinner size="lg" />
+        <Loading size="lg" />
       </div>
     );
   }

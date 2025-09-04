@@ -27,14 +27,19 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
     
+    // Normalisasi nomor surat dari QR (bisa dalam bentuk encoded %2F)
+    let normalizedNumber = typeof letterNumber === 'string' ? letterNumber : '';
+    try { normalizedNumber = decodeURIComponent(normalizedNumber); } catch {}
+    normalizedNumber = normalizedNumber.trim();
+
     // Cari surat berdasarkan nomor - PERBAIKI RELASI
     const letter = await prisma.permissionLetter.findFirst({
       where: { 
-        letter_number: letterNumber.trim(),
+        letter_number: normalizedNumber,
         status: 'approved'
       },
       include: {
-        participants: true,
+        _count: { select: { participants: true } },
         // Gunakan relasi yang benar sesuai schema Prisma
         creator: {
           select: { name: true }
@@ -70,13 +75,14 @@ export async function POST(req: NextRequest) {
       valid: isValid,
       message: isValid ? 'Dokumen valid dan asli' : 'Kode validasi tidak cocok - dokumen mungkin telah diubah atau dipalsukan',
       letterInfo: isValid ? {
+        id: letter.id,
         letterNumber: letter.letter_number,
         activity: letter.activity,
         location: letter.location,
         date: letter.date,
         letterType: letter.letter_type,
         status: letter.status,
-        participantCount: letter.participants.length,
+        participantCount: (letter as any)._count?.participants ?? 0,
         createdBy: letter.creator?.name,
         approvedBy: letter.approver?.name,
         approvedAt: letter.approved_at,

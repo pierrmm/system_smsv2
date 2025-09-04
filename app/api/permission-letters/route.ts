@@ -7,6 +7,9 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
     const type = searchParams.get('type') || '';
     const status = searchParams.get('status') || '';
+    const createdBy = searchParams.get('created_by') || '';
+    const page = Math.max(1, Number(searchParams.get('page') || '1'));
+    const pageSize = Math.min(100, Math.max(1, Number(searchParams.get('pageSize') || searchParams.get('limit') || '50')));
 
     const where: any = {};
 
@@ -15,7 +18,8 @@ export async function GET(request: NextRequest) {
         { letter_number: { contains: search, mode: 'insensitive' } },
         { activity: { contains: search, mode: 'insensitive' } },
         { location: { contains: search, mode: 'insensitive' } },
-        { creator: { name: { contains: search, mode: 'insensitive' } } }
+        // relational filter to creator name
+        { creator: { is: { name: { contains: search, mode: 'insensitive' } } } }
       ];
     }
 
@@ -27,7 +31,12 @@ export async function GET(request: NextRequest) {
       where.status = status;
     }
 
-    const letters = await prisma.permissionLetter.findMany({
+    if (createdBy) {
+      where.created_by = createdBy;
+    }
+    const [total, letters] = await prisma.$transaction([
+      prisma.permissionLetter.count({ where }),
+      prisma.permissionLetter.findMany({
       where,
       include: {
         creator: {
@@ -37,21 +46,25 @@ export async function GET(request: NextRequest) {
             email: true
           }
         },
-        participants: true,
+        _count: { select: { participants: true } },
         approver: {
           select: {
             id: true,
             name: true,
             email: true
           }
-        }
+        },
+        participants: true // Pastikan ini ada
       },
       orderBy: {
         created_at: 'desc'
-      }
-    });
+      },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    })
+    ]);
 
-    return NextResponse.json({ letters });
+    return NextResponse.json({ letters, total, page, pageSize });
   } catch (error) {
     console.error('Error fetching letters:', error);
     return NextResponse.json(

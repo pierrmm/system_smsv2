@@ -78,9 +78,16 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    await prisma.adminUser.delete({
-      where: { id: params.id }
-    });
+    const DEV_EMAIL = process.env.DEV_ADMIN_EMAIL || 'developer@system.local';
+    const user = await prisma.adminUser.findUnique({ where: { id: params.id } });
+    if (user && user.email === DEV_EMAIL) {
+      return NextResponse.json(
+        { message: 'Developer account cannot be deleted' },
+        { status: 400 }
+      );
+    }
+
+    await prisma.adminUser.delete({ where: { id: params.id } });
 
     return NextResponse.json({ message: 'User deleted successfully' });
   } catch (error) {

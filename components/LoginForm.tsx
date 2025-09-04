@@ -6,7 +6,7 @@ import { Button } from '@heroui/button';
 import { Divider } from '@heroui/divider';
 import { EyeFilledIcon, EyeSlashFilledIcon } from '@heroui/shared-icons';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export function LoginForm() {
   const [email, setEmail] = useState('');
@@ -16,6 +16,7 @@ export function LoginForm() {
   
   const { signIn, loading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,33 +39,41 @@ export function LoginForm() {
     if (result.error) {
       console.log('Login error:', result.error);
       const { message, type } = result.error;
-      if (type === 'email' || type === 'password') {
-        setErrors({ [type]: message });
+      if (type === 'email') {
+        setErrors({ email: message || 'Email tidak ditemukan' });
+      } else if (type === 'password') {
+        setErrors({ password: message || 'Password salah' });
+      } else if (type === 'account') {
+        setErrors({ general: message || 'Akun Anda telah dinonaktifkan. Silakan hubungi administrator.' });
+      } else if (type === 'validation' || type === 'credentials') {
+        setErrors({ general: message || 'Email atau password tidak valid' });
+      } else if (type === 'system' || type === 'server') {
+        setErrors({ general: 'Terjadi kesalahan sistem. Silakan coba lagi.' });
       } else {
-        setErrors({ general: message });
+        setErrors({ general: message || 'Login gagal' });
       }
     } else {
       console.log('Login successful, redirecting...');
-      // Redirect ke halaman utama setelah login berhasil
-      router.push('/');
+      const redirect = searchParams?.get('redirect');
+      router.push(redirect || '/');
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950 p-4">
-      <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+      <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 items-start">
         {/* Left Column - Information */}
-        <div className="space-y-8 text-center lg:text-left">
+        <div className="order-2 lg:order-1 space-y-8 text-center lg:text-left">
           <div className="space-y-4">
-            <h1 className="text-4xl lg:text-5xl font-bold text-gray-900 dark:text-white">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 dark:text-white">
               Sistem Pengajuan Surat Digital
             </h1>
-            <p className="text-xl text-gray-600 dark:text-gray-400">
+            <p className="text-base sm:text-lg lg:text-xl text-gray-600 dark:text-gray-400">
               Kelola Pengajuan Surat dan administrasi sekolah dengan mudah dan efisien
             </p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="hidden sm:grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-3">
               <div className="w-12 h-12 bg-black dark:bg-white rounded-lg flex items-center justify-center mx-auto lg:mx-0">
                 <span className="text-white dark:text-black font-bold text-lg">📝</span>
@@ -116,19 +125,19 @@ export function LoginForm() {
         </div>
 
         {/* Right Column - Login Form */}
-        <div className="flex justify-center lg:justify-end">
+        <div className="order-1 lg:order-2 flex justify-center lg:justify-end w-full">
           <Card className="w-full max-w-md shadow-lg border border-gray-200 dark:border-gray-700">
-            <CardHeader className="flex flex-col gap-4 items-center pb-6 pt-8">
+            <CardHeader className="flex flex-col gap-4 items-center pb-5 pt-6 sm:pb-6 sm:pt-8">
               {/* Simple logo design */}
               <div className="w-16 h-16 bg-black dark:bg-white rounded-xl flex items-center justify-center">
                 <span className="text-white dark:text-black font-bold text-2xl">S</span>
               </div>
               
               <div className="text-center space-y-1">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
                   Selamat Datang
                 </h1>
-                <p className="text-gray-600 dark:text-gray-400">
+                <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
                   Masuk ke sistem
                 </p>
               </div>
@@ -136,7 +145,7 @@ export function LoginForm() {
             
             <Divider className="bg-gray-200 dark:bg-gray-700" />
             
-            <CardBody className="gap-4 px-8 py-6">
+            <CardBody className="gap-4 px-6 sm:px-8 py-6">
               {errors.general && (
                 <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
                   {errors.general}

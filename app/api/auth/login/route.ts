@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     // Cek apakah user aktif
     if (!user.is_active) {
       return NextResponse.json(
-        { error: { message: 'Akun tidak aktif', type: 'account' } },
+        { error: { message: 'Akun Anda telah dinonaktifkan. Silakan hubungi administrator.', type: 'account' } },
         { status: 401 }
       );
     }

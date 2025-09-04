@@ -3,7 +3,6 @@ import "@/styles/globals.css";
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import clsx from "clsx";
-import { AuthProvider } from "@/contexts/AuthContext";
 
 import { Providers } from "./providers";
 
@@ -48,11 +47,9 @@ export default function RootLayout({
           fontSans.variable,
         )}
       >
-        <AuthProvider>
-          <Providers themeProps={{ attribute: "class", defaultTheme: "dark" }}>
-            {children}
-          </Providers>
-        </AuthProvider>
+        <Providers themeProps={{ attribute: "class", defaultTheme: "dark" }}>
+          {children}
+        </Providers>
       </body>
     </html>
   );

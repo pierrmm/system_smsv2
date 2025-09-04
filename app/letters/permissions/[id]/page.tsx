@@ -18,8 +18,9 @@ import {
   IconDownload
 } from '@tabler/icons-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '@/components/AppLayout';
+import Loading from '@/components/Loading';
 import Link from 'next/link';
 
 interface PermissionLetter {
@@ -58,6 +59,11 @@ export default function PermissionLetterDetailPage({
   const [actionLoading, setActionLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [letterId, setLetterId] = useState<string>('');
+  const searchParams = useSearchParams();
+  const from = searchParams?.get('from');
+  const codeParam = searchParams?.get('code') || '';
+  const backCode = (() => { try { return decodeURIComponent(codeParam); } catch { return codeParam; } })();
+  const isPublicView = from === 'verify';
 
   const META_PREFIX = '__META__:';
 
@@ -260,14 +266,14 @@ export default function PermissionLetterDetailPage({
   if (loading || !letterId) {
     return (
       <AppLayout>
-        <div className="flex justify-center items-center min-h-96">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-gray-600 dark:text-gray-400">Memuat data surat...</p>
-          </div>
-        </div>
+        <Loading message="Memuat data surat..." size="lg" className="min-h-96" />
       </AppLayout>
     );
+  }
+
+  // Jika bukan dari verifikasi dan belum login, paksa login dulu
+  if (!isPublicView && !user) {
+    router.push(`/login?redirect=${encodeURIComponent(`/letters/permissions/${letterId}`)}`);
   }
 
   if (!letter) {
@@ -286,7 +292,7 @@ export default function PermissionLetterDetailPage({
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex items-center gap-3 md:gap-4">
-             <Link href="/letters/permissions">
+             <Link href={isPublicView ? `/verify/${backCode}` : '/letters/permissions'}>
                <Button
                 variant="light"
                 size="sm"
@@ -298,7 +304,7 @@ export default function PermissionLetterDetailPage({
              </Link>
              <div>
                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                 Detail Pengjuan Surat 
+                 Detail Pengajuan Surat 
                </h1>
                <p className="text-gray-600 dark:text-gray-400 mt-1">
                  {letter.letter_number}
@@ -307,7 +313,7 @@ export default function PermissionLetterDetailPage({
            </div>
            
           <div className="flex gap-2 flex-wrap">
-            {letter.status === 'approved' && (
+            {letter.status === 'approved' && !isPublicView && (
               <Button
                 variant="flat"
                 color="default"
@@ -318,7 +324,7 @@ export default function PermissionLetterDetailPage({
                 Download PDF
               </Button>
             )}
-            {user?.role === 'admin' && letter.status === 'pending' && (
+            {user?.role === 'admin' && letter.status === 'pending' && !isPublicView && (
                <>
                  <Button
                    color="success"
@@ -478,7 +484,7 @@ export default function PermissionLetterDetailPage({
                       {participant.name}
                     </p>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Kelas {participant.class}
+                      Jabatan/Kelas: {participant.class}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       Keterangan: {participant.reason && participant.reason.trim() !== '' ? participant.reason : '-'}

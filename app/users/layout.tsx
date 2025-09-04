@@ -1,6 +1,6 @@
 'use client';
 
-import { Spinner } from "@heroui/spinner";
+import Loading from "@/components/Loading";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { AppLayout } from "@/components/AppLayout";
@@ -23,7 +23,7 @@ export default function UsersLayout({
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Spinner size="lg" />
+        <Loading size="lg" />
       </div>
     );
   }

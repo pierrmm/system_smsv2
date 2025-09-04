@@ -212,6 +212,19 @@
   --sidebar-ring: oklch(0.551 0.027 264.364);
 }
 
+/* ====== Consistent Loading Spinner (arc + dotted ring) ====== */
+.sms-loader{position:relative;color:#111}
+.dark .sms-loader{color:#fff}
+.sms-loader-sm{width:24px;height:24px}
+.sms-loader-md{width:48px;height:48px}
+.sms-loader-lg{width:64px;height:64px}
+.sms-loader::before,.sms-loader::after{content:"";position:absolute;inset:0;border-radius:50%}
+/* Arc ring */
+.sms-loader::before{border:3px solid transparent;border-top-color:currentColor;border-right-color:currentColor;transform:rotate(45deg);animation:sms-rot 1s linear infinite}
+/* Dotted outer ring */
+.sms-loader::after{inset:-6px;border:3px dashed currentColor;opacity:.6;animation:sms-rot 2s linear infinite reverse}
+@keyframes sms-rot{to{transform:rotate(360deg)}}
+
 
 
 @layer base {

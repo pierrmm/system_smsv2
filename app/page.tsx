@@ -123,6 +123,9 @@ export default function HomePage() {
   const isInitialLoad = useRef(true);
   const pollInterval = useRef<NodeJS.Timeout | null>(null);
 
+  // State untuk menyimpan hasil validasi surat
+  const [verifiedLetterId, setVerifiedLetterId] = useState<string | null>(null);
+
   const isAdmin = () => user?.role === 'admin';
 
   // Utility functions untuk notifikasi
@@ -441,6 +444,11 @@ export default function HomePage() {
     }
   };
 
+  // Handler ketika verifikasi dokumen sukses
+  const handleVerificationSuccess = useCallback((result: { letterId: string }) => {
+    setVerifiedLetterId(result.letterId);
+  }, []);
+
   if (authLoading || (loadingData && !stats && recentLetters.length === 0)) {
     return (
       <AppLayout>
@@ -673,10 +681,43 @@ export default function HomePage() {
       </div>
 
       {/* Document Verification Modal */}
-      <DocumentVerificationModal 
-        isOpen={isVerifyOpen} 
-        onClose={onVerifyClose} 
+      <DocumentVerificationModal
+        isOpen={isVerifyOpen}
+        onClose={onVerifyClose}
+        onSuccess={handleVerificationSuccess}
       />
+      {/* Tombol redirect ke detail surat jika validasi sukses */}
+      {verifiedLetterId && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            zIndex: 1000,
+            pointerEvents: 'auto',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          <a
+            href={`/letters/permissions/${verifiedLetterId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ textDecoration: 'none' }}
+          >
+            <Button
+              color="success"
+              variant="solid"
+              startContent={<IconEye className="h-4 w-4" />}
+              size="lg"
+              className="shadow-lg"
+            >
+              Lihat Detail Surat
+            </Button>
+          </a>
+        </div>
+      )}
     </AppLayout>
   );
 }

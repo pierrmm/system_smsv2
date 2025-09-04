@@ -13,7 +13,7 @@ import { Card, CardBody, CardHeader } from '@heroui/card';
 import { Button } from '@heroui/button';
 import { Input } from '@heroui/input';
 import { Select, SelectItem } from '@heroui/select';
-import { Spinner } from '@heroui/spinner';
+import Loading from '@/components/Loading';
 import { useAuth } from '@/contexts/AuthContext';
 import { DatePicker } from '@heroui/date-picker';
 import { TimeInput } from '@heroui/date-input';
@@ -295,12 +295,7 @@ export default function EditPermissionLetterPage() {
   if (loading) {
     return (
       <AppLayout>
-        <div className="flex justify-center items-center min-h-96">
-          <div className="text-center">
-            <Spinner size="lg" color="primary" />
-            <p className="mt-4 text-gray-600 dark:text-gray-400">Memuat data...</p>
-          </div>
-        </div>
+        <Loading message="Memuat data..." size="lg" className="min-h-96" />
       </AppLayout>
     );
   }
@@ -475,16 +470,16 @@ export default function EditPermissionLetterPage() {
               {participants.map((participant, index) => (
                 <div key={index} className="flex flex-col md:flex-row gap-4">
                   <Input
-                    label="Nama Peserta"
-                    placeholder="Masukkan nama peserta"
+                    label="Nama"
+                    placeholder="Masukkan nama"
                     value={participant.name}
                     onChange={(e) => handleParticipantChange(index, 'name', e.target.value)}
                     className="flex-1"
                     isRequired
                   />
                   <Input
-                    label="Kelas"
-                    placeholder="Contoh: XII RPL 1"
+                    label="Jabatan"
+                    placeholder="Contoh: Kelas/Guru"
                     value={participant.class}
                     onChange={(e) => handleParticipantChange(index, 'class', e.target.value)}
                     className="flex-1"
@@ -492,7 +487,7 @@ export default function EditPermissionLetterPage() {
                   />
                   <Input
                     label="Keterangan"
-                    placeholder="Keterangan / alasan peserta"
+                    placeholder="Keterangan/alasan"
                     value={participant.reason}
                     onChange={(e) => handleParticipantChange(index, 'reason', e.target.value)}
                     className="flex-1"

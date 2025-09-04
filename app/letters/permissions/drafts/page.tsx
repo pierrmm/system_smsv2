@@ -1,15 +1,19 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/AppLayout';
+import Loading from '@/components/Loading';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardBody } from '@heroui/card';
 import { Button } from '@heroui/button';
 import { Chip } from '@heroui/chip';
 import { Divider } from '@heroui/divider';
 import { Input } from '@heroui/input';
-import { IconSearch, IconEdit, IconEye, IconPlus } from '@tabler/icons-react';
+import { Select, SelectItem } from '@heroui/select';
+import { Pagination } from '@heroui/pagination';
+import { IconSearch, IconEdit, IconEye, IconPlus, IconFilter } from '@tabler/icons-react';
 
 interface Participant {
   id?: string;
@@ -44,10 +48,15 @@ const formatDate = (d: string) => {
 };
 
 export default function DraftLettersPage() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, loading: authLoading } = useAuth();
+  const router = useRouter();
   const [letters, setLetters] = useState<PermissionLetter[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'az' | 'za'>('latest');
+  const [page, setPage] = useState(1);
+  const pageSize = 12;
 
   const fetchDrafts = useCallback(async () => {
     if (!user) return;
@@ -104,11 +113,37 @@ export default function DraftLettersPage() {
 
   useEffect(() => { fetchDrafts(); }, [fetchDrafts]);
 
-  const filtered = letters.filter(l =>
-    !q ||
-    l.letter_number?.toLowerCase().includes(q.toLowerCase()) ||
-    l.activity?.toLowerCase().includes(q.toLowerCase())
-  );
+  // Require login: redirect to login with return path
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push(`/login?redirect=${encodeURIComponent('/letters/permissions/drafts')}`);
+    }
+  }, [authLoading, user, router]);
+
+  const filtered = useMemo(() => {
+    const ql = q.trim().toLowerCase();
+    let list = letters.filter(l =>
+      !ql ||
+      l.letter_number?.toLowerCase().includes(ql) ||
+      l.activity?.toLowerCase().includes(ql)
+    );
+    if (typeFilter) list = list.filter(l => l.letter_type === typeFilter);
+    // sorting
+    list = [...list].sort((a, b) => {
+      if (sortBy === 'latest') return (new Date(b.date).getTime() || 0) - (new Date(a.date).getTime() || 0);
+      if (sortBy === 'oldest') return (new Date(a.date).getTime() || 0) - (new Date(b.date).getTime() || 0);
+      const an = (a.letter_number || '').localeCompare(b.letter_number || '');
+      return sortBy === 'az' ? an : -an;
+    });
+    return list;
+  }, [letters, q, typeFilter, sortBy]);
+
+  // Reset ke halaman 1 jika filter berubah
+  useEffect(() => { setPage(1); }, [q, typeFilter, sortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const start = (page - 1) * pageSize;
+  const current = filtered.slice(start, start + pageSize);
 
   return (
     <AppLayout>
@@ -121,32 +156,83 @@ export default function DraftLettersPage() {
               {isAdmin() ? 'Semua draft surat.' : 'Draft surat milik Anda.'}
             </p>
           </div>
-          <div className="flex gap-2">
-            <Input
-              value={q}
-              onChange={e => setQ(e.target.value)}
-              placeholder="Cari draft..."
-              size="sm"
-              className="w-52 md:w-64"
-              startContent={<IconSearch className="h-4 w-4 text-gray-400" />}
-            />
-            <Button
-              as={Link}
-              href="/letters/permissions/create"
-              variant="solid"
-              color="default"
-              className="bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200 font-medium"
-              startContent={<IconPlus className="h-5 w-5" />}
-            >
-              Baru
-            </Button>
-          </div>
+          <Button
+            as={Link}
+            href="/letters/permissions/create"
+            variant="solid"
+            color="default"
+            className="bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200 font-medium"
+            startContent={<IconPlus className="h-5 w-5" />}
+          >
+            Baru
+          </Button>
         </div>
+
+        {/* Filters */}
+        <Card>
+          <CardBody className="p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <Input
+                value={q}
+                onChange={e => setQ(e.target.value)}
+                placeholder="Cari draft..."
+                size="sm"
+                startContent={<IconSearch className="h-4 w-4 text-gray-400" />}
+              />
+              <Select
+                aria-label="Filter Jenis Surat"
+                placeholder="Jenis Surat"
+                selectedKeys={typeFilter ? [typeFilter] : []}
+                onSelectionChange={(keys) => {
+                  const key = Array.from(keys)[0] as string;
+                  setTypeFilter(key || '');
+                }}
+                startContent={<IconFilter className="h-4 w-4" />}
+              >
+                <SelectItem key="">Semua Jenis</SelectItem>
+                <SelectItem key="dispensasi">Surat Dispensasi</SelectItem>
+                <SelectItem key="keterangan">Surat Keterangan</SelectItem>
+                <SelectItem key="surat_tugas">Surat Tugas</SelectItem>
+                <SelectItem key="lomba">Surat Izin Lomba</SelectItem>
+              </Select>
+              <Select
+                aria-label="Urutkan"
+                placeholder="Urutkan"
+                selectedKeys={[sortBy]}
+                onSelectionChange={(keys) => {
+                  const key = Array.from(keys)[0] as string;
+                  setSortBy((key as any) || 'latest');
+                }}
+                startContent={<IconFilter className="h-4 w-4" />}
+              >
+                <SelectItem key="latest">Terbaru</SelectItem>
+                <SelectItem key="oldest">Terlama</SelectItem>
+                <SelectItem key="az">Nomor A → Z</SelectItem>
+                <SelectItem key="za">Nomor Z → A</SelectItem>
+              </Select>
+              <div className="flex items-stretch">
+                {(q || typeFilter || sortBy !== 'latest') ? (
+                  <Button
+                    fullWidth
+                    variant="flat"
+                    onPress={() => { setQ(''); setTypeFilter(''); setSortBy('latest'); }}
+                  >
+                    Reset Filter
+                  </Button>
+                ) : (
+                  <Button fullWidth variant="bordered" isDisabled>
+                    Tidak ada filter
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardBody>
+        </Card>
 
         {/* Info / state */}
         {loading && (
-          <div className="text-center py-16 text-sm text-gray-600 dark:text-gray-400">
-            Memuat draft...
+          <div className="py-12">
+            <Loading message="Memuat draft..." />
           </div>
         )}
 
@@ -159,7 +245,7 @@ export default function DraftLettersPage() {
         {/* Grid Drafts */}
         {!loading && filtered.length > 0 && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filtered.map(d => (
+            {current.map(d => (
               <Card
                 key={d.id}
                 radius="sm"
@@ -228,6 +314,21 @@ export default function DraftLettersPage() {
                 </CardBody>
               </Card>
             ))}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!loading && filtered.length > pageSize && (
+          <div className="flex justify-center pt-2">
+            <Pagination
+              page={page}
+              total={totalPages}
+              onChange={setPage}
+              showControls
+              showShadow
+              variant="bordered"
+              classNames={{ cursor: 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900' }}
+            />
           </div>
         )}
       </div>

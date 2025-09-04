@@ -1,13 +1,9 @@
 'use client';
 
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useMemo
-} from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { AppLayout } from '@/components/AppLayout';
+import Loading from '@/components/Loading';
 import { useAuth } from '@/contexts/AuthContext';
 
 import { Card, CardBody } from '@heroui/card';
@@ -103,8 +99,10 @@ export default function PermissionLettersPage() {
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  // Tampilkan hanya status "pending (Menunggu)" di halaman pengajuan
+  const [statusFilter, setStatusFilter] = useState('pending');
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [letterToDelete, setLetterToDelete] = useState<PermissionLetter | null>(null);
@@ -121,69 +119,78 @@ export default function PermissionLettersPage() {
     []
   );
 
+  // Pada halaman ini, hanya "Menunggu" yang relevan (approved/rejected dipindah ke draft)
   const statusOptions = useMemo(
     () => [
-      { key: '', label: 'Semua Status' },
-      { key: 'draft', label: 'Draft' },
-      { key: 'pending', label: 'Menunggu' },
-      { key: 'approved', label: 'Disetujui' },
-      { key: 'rejected', label: 'Ditolak' }
+      { key: 'pending', label: 'Menunggu' }
     ],
     []
   );
 
-  const fetchLetters = useCallback(async () => {
+  const fetchLetters = useCallback(() => {
     if (!user) return;
-    try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      if (search) params.append('search', search);
-      if (typeFilter) params.append('type', typeFilter);
-      if (statusFilter) params.append('status', statusFilter);
-      if (!isAdmin() && user.id) params.append('created_by', user.id);
-      const res = await fetch(`/api/permission-letters?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        let list: PermissionLetter[] = Array.isArray(data.letters) ? data.letters : [];
-
-        // fallback filter user
-        if (!isAdmin() && user.id) list = list.filter(l => l.created_by === user.id);
-
-        // TEMUKAN surat approved / rejected -> ubah ke draft
-        const toDraft = list.filter(l => l.status === 'approved' || l.status === 'rejected');
-        if (toDraft.length) {
-          // update paralel (silent)
-            await Promise.all(
-              toDraft.map(l =>
-                fetch(`/api/permission-letters/${l.id}`, {
-                  method: 'PUT',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ status: 'draft' })
-                }).catch(() => null)
-              )
-            );
-          // buang dari tampilan utama (hanya sisakan pending)
-          list = list.filter(l => l.status === 'pending');
+    const controller = new AbortController();
+    const run = async () => {
+      try {
+        setLoading(true);
+        const params = new URLSearchParams();
+        if (searchDebounced) params.append('search', searchDebounced);
+        if (typeFilter) params.append('type', typeFilter);
+        if (statusFilter) params.append('status', statusFilter);
+        if (!isAdmin() && user.id) params.append('created_by', user.id);
+        params.append('page', '1');
+        params.append('pageSize', '30');
+        const res = await fetch(`/api/permission-letters?${params.toString()}` , {
+          signal: controller.signal,
+          // data changes quickly; avoid caching stale responses on dev
+          cache: 'no-store'
+        });
+        if (res.ok) {
+          const data = await res.json();
+          let list: PermissionLetter[] = Array.isArray(data.letters) ? data.letters : [];
+          if (!isAdmin() && user.id) list = list.filter((l) => l.created_by === user.id);
+          // Hanya tampilkan yang berstatus pending (Menunggu) di halaman ini
+          list = list.filter((l) => l.status === 'pending');
+          setLetters(list);
         } else {
-          // jika tidak ada yang dipindah tapi user memilih filter status tertentu, tetap hormati
-          list = list.filter(l => l.status === 'pending');
+          setLetters([]);
         }
-
-        setLetters(list);
-      } else {
-        setLetters([]);
+      } catch (e) {
+        if ((e as any)?.name !== 'AbortError') {
+          if (process.env.NODE_ENV === 'development') {
+            console.error('Error fetching letters:', e);
+          }
+          setLetters([]);
+        }
+      } finally {
+        setLoading(false);
       }
-    } catch (e) {
-      console.error('Error fetching letters:', e);
-      setLetters([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [user, isAdmin, search, typeFilter, statusFilter]);
+    };
+    run();
+    return () => controller.abort();
+  }, [user, isAdmin, searchDebounced, typeFilter, statusFilter]);
 
   useEffect(() => {
     fetchLetters();
   }, [fetchLetters]);
+
+  // Debounce search input (300ms)
+  useEffect(() => {
+    const t = setTimeout(() => setSearchDebounced(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Optional debug log only in dev
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      // eslint-disable-next-line no-console
+      console.log('Letters data:', letters.map(l => ({
+        id: l.id,
+        letter_number: l.letter_number,
+        participants_count: l.participants?.length || 0,
+      })));
+    }
+  }, [letters]);
 
   const askDelete = useCallback(
     (letter: PermissionLetter) => {
@@ -273,7 +280,7 @@ export default function PermissionLettersPage() {
                 selectedKeys={statusFilter ? [statusFilter] : []}
                 onSelectionChange={(keys) => {
                   const key = Array.from(keys)[0] as string;
-                  setStatusFilter(key || '');
+                  setStatusFilter(key || 'pending');
                 }}
                 startContent={<IconFilter className="h-4 w-4" />}
               >
@@ -289,7 +296,8 @@ export default function PermissionLettersPage() {
                     onPress={() => {
                       setSearch('');
                       setTypeFilter('');
-                      setStatusFilter('');
+                      // Tetapkan kembali ke 'pending' agar tetap hanya menampilkan yang menunggu
+                      setStatusFilter('pending');
                     }}
                   >
                     Reset Filter
@@ -308,10 +316,8 @@ export default function PermissionLettersPage() {
         <div className="space-y-4">
           {loading && (
             <Card>
-              <CardBody className="py-12 text-center">
-                <p className="text-gray-600 dark:text-gray-400">
-                  Memuat surat...
-                </p>
+              <CardBody className="py-10">
+                <Loading message="Memuat surat..." />
               </CardBody>
             </Card>
           )}
@@ -403,15 +409,25 @@ export default function PermissionLettersPage() {
                           Peserta:
                         </p>
                         <div className="flex flex-wrap gap-2">
-                          {(letter.participants || []).map((p) => (
-                            <Chip key={p.id} size="sm" variant="flat">
-                              {p.name} ({p.class})
-                            </Chip>
-                          ))}
-                          {(!letter.participants ||
-                            letter.participants.length === 0) && (
+                          {(letter.participants && letter.participants.length > 0) ? (() => {
+                            const max = 10;
+                            const shown = letter.participants.slice(0, max);
+                            const rest = Math.max(0, (letter.participants?.length || 0) - shown.length);
+                            return (
+                              <>
+                                {shown.map((p) => (
+                                  <Chip key={p.id} size="sm" variant="flat">
+                                    {p.name} ({p.class})
+                                  </Chip>
+                                ))}
+                                {rest > 0 && (
+                                  <Chip size="sm" variant="bordered">+{rest} lainnya</Chip>
+                                )}
+                              </>
+                            );
+                          })() : (
                             <span className="text-sm text-gray-500 dark:text-gray-400">
-                              Tidak ada peserta
+                              Belum ada peserta ditambahkan
                             </span>
                           )}
                         </div>

