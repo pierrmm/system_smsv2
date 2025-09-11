@@ -220,13 +220,22 @@ export async function PUT(req: NextRequest, { params }: Params) {
 }
 
 // DELETE - Delete permission letter
-export async function DELETE(_req: NextRequest, { params }: Params) {
+export async function DELETE(req: NextRequest, { params }: Params) {
   try {
     const { id } = params;
 
     const existingLetter = await prisma.permissionLetter.findUnique({ where: { id } });
     if (!existingLetter) {
       return NextResponse.json({ message: 'Surat tidak ditemukan' }, { status: 404 });
+    }
+
+    // Basic authorization: allow admin or owner (header-provided)
+    const userId = req.headers.get('x-user-id') || undefined;
+    const userRole = req.headers.get('x-user-role') || undefined;
+    const isAdmin = userRole === 'admin';
+    const isOwner = userId && existingLetter.created_by === userId;
+    if (!isAdmin && !isOwner) {
+      return NextResponse.json({ message: 'Tidak diizinkan menghapus surat ini' }, { status: 403 });
     }
 
     await prisma.permissionLetter.delete({ where: { id } });

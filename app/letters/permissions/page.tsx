@@ -194,14 +194,15 @@ export default function PermissionLettersPage() {
 
   const askDelete = useCallback(
     (letter: PermissionLetter) => {
-      if (!isAdmin()) {
-        alert('Hanya admin yang dapat menghapus surat');
+      const canDelete = isAdmin() || letter.created_by === user?.id;
+      if (!canDelete) {
+        alert('Anda hanya dapat menghapus surat yang Anda buat');
         return;
       }
       setLetterToDelete(letter);
       setConfirmOpen(true);
     },
-    [isAdmin]
+    [isAdmin, user]
   );
 
   const confirmDelete = useCallback(async () => {
@@ -209,7 +210,11 @@ export default function PermissionLettersPage() {
     try {
       setDeleting(true);
       const res = await fetch(`/api/permission-letters/${letterToDelete.id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+          'x-user-id': user?.id || '',
+          'x-user-role': isAdmin() ? 'admin' : 'user'
+        }
       });
       if (!res.ok) {
         alert('Gagal menghapus surat');
@@ -224,7 +229,7 @@ export default function PermissionLettersPage() {
     } finally {
       setDeleting(false);
     }
-  }, [letterToDelete, fetchLetters]);
+  }, [letterToDelete, fetchLetters, user, isAdmin]);
 
   const canEditOrDelete = (letter: PermissionLetter) =>
     isAdmin() || letter.created_by === user?.id;
@@ -458,7 +463,7 @@ export default function PermissionLettersPage() {
                           <IconEdit className="h-4 w-4" />
                         </Button>
                       )}
-                      {isAdmin() && (
+                      {canEditOrDelete(letter) && (
                         <Button
                           size="sm"
                           variant="light"
