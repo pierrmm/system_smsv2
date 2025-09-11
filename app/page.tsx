@@ -111,6 +111,7 @@ export default function HomePage() {
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentLetters, setRecentLetters] = useState<PermissionLetter[]>([]);
+  const [totalDrafts, setTotalDrafts] = useState<number>(0);
   const [loadingData, setLoadingData] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusKey | 'all'>('all');
@@ -125,6 +126,8 @@ export default function HomePage() {
 
   // State untuk menyimpan hasil validasi surat
   const [verifiedLetterId, setVerifiedLetterId] = useState<string | null>(null);
+  // About/Help modal (cara penggunaan)
+  const { isOpen: isAboutOpen, onOpen: onAboutOpen, onClose: onAboutClose } = useDisclosure();
 
   const isAdmin = () => user?.role === 'admin';
 
@@ -246,9 +249,13 @@ export default function HomePage() {
       const lettersUrl = isAdmin()
         ? '/api/permission-letters?limit=50'
         : `/api/permission-letters?limit=50&created_by=${user?.id}`;
-      const [statsRes, lettersRes] = await Promise.all([
+      const draftCountUrl = isAdmin()
+        ? '/api/permission-letters?status=draft&page=1&pageSize=1'
+        : `/api/permission-letters?status=draft&page=1&pageSize=1&created_by=${user?.id}`;
+      const [statsRes, lettersRes, draftsRes] = await Promise.all([
         fetch(statsUrl),
-        fetch(lettersUrl)
+        fetch(lettersUrl),
+        fetch(draftCountUrl)
       ]);
       if (statsRes.ok) {
         const s = await statsRes.json();
@@ -291,6 +298,11 @@ export default function HomePage() {
 
         setRecentLetters(letters);
       } else setRecentLetters([]);
+      // Fetch draft total count
+      if (draftsRes.ok) {
+        const d = await draftsRes.json();
+        if (typeof d.total === 'number') setTotalDrafts(d.total);
+      }
     } catch {
       setStats(null);
       setRecentLetters([]);
@@ -513,11 +525,12 @@ export default function HomePage() {
         </div>
 
         {/* Stats Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
           <StatCard title="Total Surat" value={trendContext.current.totalLetters} trend={trendData.total} icon={<IconFileText className="h-5 w-5 text-gray-500" />} />
           <StatCard title="Menunggu" value={trendContext.current.pendingLetters} trend={trendData.pending} icon={<IconClock className="h-5 w-5 text-gray-500" />} />
           <StatCard title="Disetujui" value={trendContext.current.approvedLetters} trend={trendData.approved} icon={<IconFileText className="h-5 w-5 text-gray-500" />} />
           <StatCard title="Ditolak" value={trendContext.current.rejectedLetters} trend={trendData.rejected} icon={<IconFileText className="h-5 w-5 text-gray-500" />} />
+          <StatCard title="Draft" value={totalDrafts} trend={null} icon={<IconFileText className="h-5 w-5 text-gray-500" />} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -671,9 +684,16 @@ export default function HomePage() {
 
             <SimpleCard title="Informasi Sistem">
               <div className="space-y-2">
-                <InfoRow label="Total Pengguna" value={(derived.totalUsers ?? 0).toString()} />
-                <InfoRow label="Created by" value="pierre" />
-                <InfoRow label="Update" value={new Date().toLocaleDateString('id-ID')} />
+                <InfoRow label="Dibuat oleh" value="pierre" />
+                <div className="pt-1 text-[11px] text-gray-600 dark:text-gray-400">
+                  <div>Fungsi: Kelola pengajuan surat, persetujuan, dan unduhan PDF.</div>
+                  <div>Cara pakai: Ajukan → Tinjau → Setujui/Tolak → Cetak.</div>
+                </div>
+                <div className="pt-2">
+                  <Button size="sm" variant="flat" onPress={onAboutOpen} className="w-full">
+                    Baca selengkapnya
+                  </Button>
+                </div>
               </div>
             </SimpleCard>
           </div>
@@ -686,6 +706,13 @@ export default function HomePage() {
         onClose={onVerifyClose}
         onSuccess={handleVerificationSuccess}
       />
+      {/* About / Cara Penggunaan Modal */}
+      {isAboutOpen && (
+        <div role="dialog" aria-modal="true">
+          {/* Using HeroUI Modal for consistency */}
+        </div>
+      )}
+      <AboutModal isOpen={isAboutOpen} onClose={onAboutClose} />
       {/* Tombol redirect ke detail surat jika validasi sukses */}
       {verifiedLetterId && (
         <div
@@ -798,6 +825,52 @@ function InfoIcon({ icon, text }: { icon: React.ReactNode; text: string }) {
     <div className="flex items-center gap-1 truncate">
       {icon}
       <span className="truncate">{text || '-'}</span>
+    </div>
+  );
+}
+
+// Modal konten cara penggunaan + fungsi
+function AboutModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative max-w-lg w-[90%] rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl">
+        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Panduan Penggunaan</h3>
+        </div>
+        <div className="p-4 space-y-3 text-sm text-gray-700 dark:text-gray-300">
+          <div>
+            <div className="font-semibold mb-1">Fungsi Utama</div>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>Pengajuan surat izin/keterangan/kegiatan oleh pengguna.</li>
+              <li>Review dan persetujuan/penolakan surat oleh admin.</li>
+              <li>Unduh surat sebagai PDF setelah disetujui.</li>
+              <li>Pantau status surat secara realtime.</li>
+            </ul>
+          </div>
+          <div>
+            <div className="font-semibold mb-1">Langkah Penggunaan</div>
+            <ol className="list-decimal pl-5 space-y-1">
+              <li>Masuk ke sistem dan buka menu "Pengajuan Surat".</li>
+              <li>Klik "Buat Baru", isi data kegiatan/lokasi/waktu/peserta.</li>
+              <li>Kirim pengajuan; admin akan meninjau.</li>
+              <li>Admin: buka daftar, pilih surat, lalu Setujui/Tolak.</li>
+              <li>Jika disetujui, unduh PDF atau bagikan sesuai kebutuhan.</li>
+            </ol>
+          </div>
+          <div>
+            <div className="font-semibold mb-1">Tips</div>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>Gunakan kolom pencarian dan filter jenis untuk mempercepat.</li>
+              <li>Nyalakan notifikasi browser agar update terlihat segera.</li>
+            </ul>
+          </div>
+        </div>
+        <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-800 flex justify-end">
+          <Button size="sm" onPress={onClose} variant="flat">Tutup</Button>
+        </div>
+      </div>
     </div>
   );
 }

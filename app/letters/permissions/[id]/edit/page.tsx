@@ -15,7 +15,7 @@ import { Input } from '@heroui/input';
 import { Select, SelectItem } from '@heroui/select';
 import Loading from '@/components/Loading';
 import { useAuth } from '@/contexts/AuthContext';
-import { DatePicker } from '@heroui/date-picker';
+import { DatePicker, DateRangePicker } from '@heroui/date-picker';
 import { TimeInput } from '@heroui/date-input';
 import { parseDate, CalendarDate, parseTime, Time } from '@internationalized/date';
 
@@ -343,48 +343,24 @@ export default function EditPermissionLetterPage() {
               <h3 className="text-lg font-semibold">Informasi Surat</h3>
             </CardHeader>
             <CardBody className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Tanggal Mulai */}
-                <div className="flex flex-col gap-2">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Tanggal Mulai
-                  </span>
-                  <DatePicker
-                    aria-label="Tanggal Mulai"
-                    variant="flat"
-                    value={safeParseDate(formData.date_start) || null}
-                    minValue={parseDate(todayIso)}
-                    onChange={(val) =>
-                      setFormData(f => {
-                        const newStart = val ? val.toString() : '';
-                        // Jika end sebelum start, sesuaikan
-                        const fixedEnd = f.date_end && f.date_end < newStart ? newStart : f.date_end;
-                        return { ...f, date_start: newStart, date_end: fixedEnd };
-                      })
-                    }
-                    placeholderValue={parseDate(new Date().toISOString().slice(0,10))}
-                    isRequired
-                    granularity="day"
-                  />
-                </div>
-                {/* Tanggal Selesai */}
-                <div className="flex flex-col gap-2">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Tanggal Selesai
-                  </span>
-                  <DatePicker
-                    aria-label="Tanggal Selesai"
-                    variant="flat"
-                    value={safeParseDate(formData.date_end) || null}
-                    minValue={parseDate(formData.date_start || todayIso)}
-                    onChange={(val) =>
-                      setFormData(f => ({ ...f, date_end: val ? val.toString() : '' }))
-                    }
-                    placeholderValue={parseDate(new Date().toISOString().slice(0,10))}
-                    isRequired
-                    granularity="day"
-                  />
-                </div>
+              <div className="grid grid-cols-1 gap-4">
+                <DateRangePicker
+                  label="Rentang Tanggal"
+                  variant="flat"
+                  value={{ start: safeParseDate(formData.date_start) || null, end: safeParseDate(formData.date_end) || null } as any}
+                  minValue={parseDate(todayIso)}
+                  onChange={(range: any) =>
+                    setFormData(f => {
+                      const start = range?.start ? range.start.toString() : '';
+                      const end = range?.end ? range.end.toString() : '';
+                      // pastikan end >= start jika keduanya ada
+                      const fixedEnd = end && start && end < start ? start : end;
+                      return { ...f, date_start: start, date_end: fixedEnd };
+                    })
+                  }
+                  isRequired
+                  granularity="day"
+                />
               </div>
 
               {/* Jenis Surat */}

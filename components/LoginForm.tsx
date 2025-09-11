@@ -1,5 +1,6 @@
 "use client";
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { Card, CardBody, CardHeader } from '@heroui/card';
 import { Input } from '@heroui/input';
 import { Button } from '@heroui/button';
@@ -60,7 +61,7 @@ export function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-950 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-4">
       <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 items-start">
         {/* Left Column - Information */}
         <div className="order-2 lg:order-1 space-y-8 text-center lg:text-left">
@@ -128,9 +129,9 @@ export function LoginForm() {
         <div className="order-1 lg:order-2 flex justify-center lg:justify-end w-full">
           <Card className="w-full max-w-md shadow-lg border border-gray-200 dark:border-gray-700">
             <CardHeader className="flex flex-col gap-4 items-center pb-5 pt-6 sm:pb-6 sm:pt-8">
-              {/* Simple logo design */}
-              <div className="w-16 h-16 bg-black dark:bg-white rounded-xl flex items-center justify-center">
-                <span className="text-white dark:text-black font-bold text-2xl">S</span>
+              {/* Logo Pesat */}
+              <div className="w-16 h-16 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-neutral-900 flex items-center justify-center">
+                <Image src="/images/pesat1.png" alt="Logo Pesat" width={64} height={64} priority className="object-contain" />
               </div>
               
               <div className="text-center space-y-1">

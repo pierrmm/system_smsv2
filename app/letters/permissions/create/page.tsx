@@ -5,7 +5,7 @@ import { Card, CardBody, CardHeader } from '@heroui/card';
 import { Button } from '@heroui/button';
 import { Input } from '@heroui/input';
 import { Select, SelectItem } from '@heroui/select';
-import { DatePicker } from '@heroui/date-picker';
+import { DatePicker, DateRangePicker } from '@heroui/date-picker';
 import { TimeInput } from '@heroui/date-input';
 import {
   IconPlus,
@@ -214,48 +214,25 @@ export default function CreatePermissionLetterPage() {
                 <h3 className="text-lg font-semibold">Informasi Surat</h3>
               </CardHeader>
               <CardBody className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Date Range */}
-                  <div className="flex flex-col gap-2">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Tanggal Mulai
-                    </span>
-                    <DatePicker
-                      aria-label="Tanggal Mulai"
-                      variant="flat"
-                      value={formData.date_start ? parseDate(formData.date_start) : null}
-                      minValue={parseDate(todayIso)}
-                      onChange={(val) =>
-                        setFormData(f => ({ ...f, date_start: val ? val.toString() : '' }))
-                      }
-                      isRequired
-                      placeholderValue={parseDate(
-                        new Date().toISOString().slice(0, 10)
-                      )}
-                      className="w-full"
-                      granularity="day"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Tanggal Selesai
-                    </span>
-                    <DatePicker
-                      aria-label="Tanggal Selesai"
-                      variant="flat"
-                      value={formData.date_end ? parseDate(formData.date_end) : null}
-                      minValue={parseDate(todayIso)}
-                      onChange={(val) =>
-                        setFormData(f => ({ ...f, date_end: val ? val.toString() : '' }))
-                      }
-                      isRequired
-                      placeholderValue={parseDate(
-                        new Date().toISOString().slice(0, 10)
-                      )}
-                      className="w-full"
-                      granularity="day"
-                    />
-                  </div>
+                <div className="grid grid-cols-1 gap-4">
+                  <DateRangePicker
+                    label="Rentang Tanggal"
+                    variant="flat"
+                    value={{
+                      start: formData.date_start ? parseDate(formData.date_start) : null,
+                      end: formData.date_end ? parseDate(formData.date_end) : null,
+                    } as any}
+                    minValue={parseDate(todayIso)}
+                    onChange={(range: any) =>
+                      setFormData(f => ({
+                        ...f,
+                        date_start: range?.start ? range.start.toString() : '',
+                        date_end: range?.end ? range.end.toString() : ''
+                      }))
+                    }
+                    isRequired
+                    granularity="day"
+                  />
                 </div>
 
                 {/* Jenis Surat (dikembalikan) */}

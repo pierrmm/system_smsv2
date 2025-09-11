@@ -25,6 +25,7 @@ import { Avatar } from "@heroui/avatar";
 import { Button } from "@heroui/button";
 import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@heroui/dropdown";
 import { Divider } from "@heroui/divider";
+import { ThemeSwitch } from "@/components/theme-switch";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -132,6 +133,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                   </p>
                 </div>
               )}
+            </div>
+            {/* Theme switch inside sidebar */}
+            <div className={cn("w-full flex items-center mb-3", open ? "justify-start" : "justify-center")}>
+              <ThemeSwitch />
             </div>
             <Button
               variant="light"
