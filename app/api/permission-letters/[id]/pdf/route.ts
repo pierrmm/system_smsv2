@@ -126,7 +126,7 @@ function generateHTML(letter: any, validationCode: string, qrCodeDataUrl: string
   const letterTypeMap: Record<string, string> = {
     dispensasi: 'DISPENSASI',
     keterangan: 'KETERANGAN',
-    surat_tugas: 'SURAT TUGAS',
+    surat_tugas: 'TUGAS',
     lomba: 'IZIN LOMBA',
   };
   const letterTypeTitle = letterTypeMap[letter.letter_type] || (letter.letter_type || '').toUpperCase();
@@ -310,10 +310,7 @@ function generateHTML(letter: any, validationCode: string, qrCodeDataUrl: string
     <!-- SIGNATURE: left ack-box, right QR -->
     <div class="signature-section">
       <div class="ack-box">
-        <div class="ack-title">Telah melaksanakan tugas</div>
-        <div>Pada tanggal <span class="dots">..............................</span></div>
-        <div style="margin-top:8px;">Panitia Penyelenggara</div>
-        <div class="ack-signline"></div>
+       
       </div>
 
       <div class="sign-box">
@@ -323,19 +320,11 @@ function generateHTML(letter: any, validationCode: string, qrCodeDataUrl: string
           <div class="validation-code">${validationCode}</div>
           <div class="validation-text">Kode Validasi Dokumen</div>
         </div>
-        <div class="signature-name">${letter.approved_by_user?.name || 'Adhi Rachmat Saputra, S.kom'}</div>
+    
       </div>
     </div>
 
-    <!-- NOTES -->
-    <div class="notes">
-      <div class="notes-title">Catatan:</div>
-      <ol>
-        <li>Siswa wajib melaporkan hasil kegiatan kepada wali kelas</li>
-        <li>Surat ini berlaku untuk tanggal yang tertera</li>
-        <li>Siswa wajib menjaga nama baik sekolah</li>
-      </ol>
-    </div>
+
   </div>
 </body>
 </html>`;

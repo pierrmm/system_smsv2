@@ -192,7 +192,16 @@ export default function UsersPage() {
         setDeleteOpen(false);
         setUserToDelete(null);
       } else {
-        alert('Error deleting user');
+        let errorMessage = 'Error deleting user';
+        try {
+          const errorData = await response.json();
+          if (errorData?.message) {
+            errorMessage = errorData.message;
+          }
+        } catch (parseError) {
+          // Ignore JSON parsing issues when the response has no body
+        }
+        alert(errorMessage);
       }
     } catch (error) {
       console.error('Error deleting user:', error);

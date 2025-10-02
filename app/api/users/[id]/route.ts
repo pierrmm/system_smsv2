@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 export async function PUT(
@@ -79,19 +80,80 @@ export async function DELETE(
 ) {
   try {
     const DEV_EMAIL = process.env.DEV_ADMIN_EMAIL || 'developer@system.local';
+
     const user = await prisma.adminUser.findUnique({ where: { id: params.id } });
-    if (user && user.email === DEV_EMAIL) {
+
+    if (!user) {
+      return NextResponse.json(
+        { message: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    if (user.email === DEV_EMAIL) {
       return NextResponse.json(
         { message: 'Developer account cannot be deleted' },
         { status: 400 }
       );
     }
 
-    await prisma.adminUser.delete({ where: { id: params.id } });
+    const fallbackOwner = await prisma.adminUser.findUnique({
+      where: { email: DEV_EMAIL },
+      select: { id: true }
+    });
+
+    if (!fallbackOwner) {
+      console.error('Developer fallback account is missing');
+      return NextResponse.json(
+        { message: 'Unable to delete user: fallback account missing' },
+        { status: 500 }
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.permissionLetter.updateMany({
+        where: { approved_by: params.id },
+        data: {
+          approved_by: null,
+          approved_at: null
+        }
+      });
+
+      await tx.letter.updateMany({
+        where: { approved_by: params.id },
+        data: { approved_by: null }
+      });
+
+      if (fallbackOwner.id !== params.id) {
+        await tx.permissionLetter.updateMany({
+          where: { created_by: params.id },
+          data: { created_by: fallbackOwner.id }
+        });
+
+        await tx.letter.updateMany({
+          where: { created_by: params.id },
+          data: { created_by: fallbackOwner.id }
+        });
+      } else {
+        console.warn('Fallback owner is the same as user being deleted, cleaning up owned letters.');
+        await tx.permissionLetter.deleteMany({ where: { created_by: params.id } });
+        await tx.letter.deleteMany({ where: { created_by: params.id } });
+      }
+
+      await tx.adminUser.delete({ where: { id: params.id } });
+    });
 
     return NextResponse.json({ message: 'User deleted successfully' });
   } catch (error) {
     console.error('Error deleting user:', error);
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+      return NextResponse.json(
+        { message: 'User cannot be deleted because related records still exist' },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
       { message: 'Internal server error' },
       { status: 500 }

@@ -74,8 +74,28 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Map jenis surat ke prefix nomor surat
+const LETTER_TYPE_PREFIX_MAP: Record<string, string> = {
+  dispensasi: 'DISPENSASI',
+  keterangan: 'KETERANGAN',
+  surat_tugas: 'SURAT_TUGAS',
+  lomba: 'LOMBA'
+};
+
+function getLetterPrefix(letterType?: string | null) {
+  if (!letterType) return 'IZIN';
+  const normalized = letterType.trim().toLowerCase();
+  if (!normalized) return 'IZIN';
+  if (LETTER_TYPE_PREFIX_MAP[normalized]) {
+    return LETTER_TYPE_PREFIX_MAP[normalized];
+  }
+  const sanitized = normalized.replace(/[^a-z0-9]+/g, '_');
+  return sanitized ? sanitized.toUpperCase() : 'IZIN';
+}
+
 // Utility: generate next letter number safely
-async function generateNextLetterNumber(prisma, prefix = 'IZIN') {
+async function generateNextLetterNumber(prisma, letterType?: string) {
+  const prefix = getLetterPrefix(letterType);
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -132,7 +152,7 @@ export async function POST(request: NextRequest) {
     const META_PREFIX = '__META__:';
 
     while (attempt < MAX_RETRY_UNIQUE && adaptAttempts < MAX_ADAPT_ATTEMPTS) {
-      const { seq, month, year, prefix } = await generateNextLetterNumber(prisma);
+      const { seq, month, year, prefix } = await generateNextLetterNumber(prisma, letter_type);
       const letter_number = `${String(seq).padStart(3, '0')}/${prefix}/${month}/${year}`;
 
       // Kumpulkan meta fallback
